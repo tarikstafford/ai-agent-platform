@@ -12,8 +12,8 @@ logger = structlog.get_logger()
 class LangflowAgent(BaseAgent):
     """Agent that executes Langflow visual workflows"""
     
-    def __init__(self, config: AgentConfig, flow_id: Optional[str] = None, flow_data: Optional[Dict[str, Any]] = None):
-        super().__init__(config)
+    def __init__(self, config: AgentConfig, agent_id: Optional[str] = None, flow_id: Optional[str] = None, flow_data: Optional[Dict[str, Any]] = None):
+        super().__init__(config, agent_id)
         self.flow_id = flow_id
         self.flow_data = flow_data
         self.langflow_server: Optional[LangflowServer] = None

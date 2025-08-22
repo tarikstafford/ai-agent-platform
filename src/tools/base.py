@@ -24,16 +24,32 @@ class BaseTool(LangchainBaseTool):
     args_schema: Optional[Type[BaseModel]] = None
     return_direct: bool = False
     
-    def __init__(self, config: Optional[ToolConfig] = None):
-        super().__init__()
-        if config:
-            self.name = config.name
-            self.description = config.description
-            self.return_direct = config.return_direct
-            self.verbose = config.verbose
-            self.max_retries = config.max_retries
+    def __init__(self, config: Optional[ToolConfig] = None, **kwargs):
+        # Prepare arguments for parent initialization
+        init_kwargs = {}
         
-        self.logger = logger.bind(tool_name=self.name)
+        if config:
+            init_kwargs.update({
+                'name': config.name,
+                'description': config.description,
+                'return_direct': config.return_direct
+            })
+        
+        # Add any additional kwargs
+        init_kwargs.update(kwargs)
+        
+        # Initialize parent class with proper arguments
+        super().__init__(**init_kwargs)
+        
+        # Set additional attributes using object.__setattr__ to bypass Pydantic
+        if config:
+            object.__setattr__(self, 'verbose', config.verbose)
+            object.__setattr__(self, '_max_retries', config.max_retries)
+        else:
+            object.__setattr__(self, 'verbose', False)
+            object.__setattr__(self, '_max_retries', 3)
+        
+        object.__setattr__(self, 'logger', logger.bind(tool_name=self.name))
     
     def _run(self, *args, **kwargs) -> str:
         """Synchronous implementation"""

@@ -24,6 +24,14 @@ A modern, extensible platform for building, hosting, and managing AI agents with
 - **Visual Agent Creation**: Create complex agents without coding
 - **Real-time Testing**: Test workflows with sample inputs before deployment
 
+### 🤝 Agent-to-Agent (A2A) Communication
+- **Agent Discovery**: Automatic discovery of agents and their capabilities
+- **Task Delegation**: Intelligent task assignment to specialized agents
+- **Multi-Agent Collaboration**: Coordinate complex workflows across multiple agents
+- **Real-time Messaging**: Direct inter-agent communication with fault tolerance
+- **Load Balancing**: Smart task distribution based on agent capacity and capabilities
+- **Network Visualization**: Interactive dashboard for monitoring agent communications
+
 ### 🛠️ Developer Experience
 - **Type Safety**: Full type hints and mypy support
 - **Testing**: Comprehensive test suite with pytest
@@ -81,6 +89,9 @@ python examples/basic_usage.py
 
 # Run research assistant example
 python examples/research_assistant.py
+
+# Test A2A communication features
+python examples/a2a_communication_demo.py
 ```
 
 ## Agent Types
@@ -143,6 +154,48 @@ response = await agent.run("Process this with my visual workflow")
 2. Click "🎨 Open Visual Builder"  
 3. Design your workflow with drag-and-drop
 4. Test and deploy as agent
+
+### A2A Communication Agent (NEW!)
+Agents with Agent-to-Agent communication capabilities:
+
+```python
+from src.agents import ConversationalAgent, AgentConfig
+
+# Create agent with A2A enabled
+config = AgentConfig(
+    name="CoordinatorBot",
+    description="Coordinates tasks between agents",
+    model="gpt-4",
+    a2a_enabled=True,
+    a2a_capabilities=["coordination", "task_delegation", "collaboration"]
+)
+
+agent = ConversationalAgent(config, agent_id="coordinator_001")
+await agent.start_a2a_communication()
+
+# Discover other agents
+available_agents = await agent.discover_agents(["calculation", "research"])
+
+# Delegate tasks
+success = await agent.delegate_task_to_agent(
+    agent_id="math_specialist_001",
+    task_type="calculation", 
+    task_data={"expression": "15 * 7 + 25"}
+)
+
+# Start collaboration
+collaboration_id = await agent.collaborate_with_agents(
+    agent_ids=["agent_001", "agent_002"],
+    collaboration_title="Research Project",
+    collaboration_description="Multi-agent research collaboration"
+)
+```
+
+**Access A2A Dashboard:**
+- Open http://127.0.0.1:8000/api/dashboard/a2a
+- Monitor agent network in real-time
+- Visualize communications and collaborations
+- Delegate tasks through the UI
 
 ## Available Tools
 

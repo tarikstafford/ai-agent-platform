@@ -21,13 +21,13 @@ class CalculatorTool(BaseTool):
     def __init__(self, config: Optional[ToolConfig] = None):
         if not config:
             config = ToolConfig(
-                name=self.name,
-                description=self.description
+                name="calculator",
+                description="Perform mathematical calculations. Input should be a valid mathematical expression."
             )
         super().__init__(config)
         
         # Define safe functions for evaluation
-        self.safe_dict = {
+        object.__setattr__(self, 'safe_dict', {
             'abs': abs,
             'round': round,
             'min': min,
@@ -43,7 +43,7 @@ class CalculatorTool(BaseTool):
             'exp': math.exp,
             'pi': math.pi,
             'e': math.e,
-        }
+        })
     
     def execute(self, expression: str) -> Any:
         """Execute mathematical calculation"""

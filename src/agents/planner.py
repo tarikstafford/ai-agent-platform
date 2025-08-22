@@ -50,8 +50,8 @@ class Plan(BaseModel):
 class PlannerAgent(BaseAgent):
     """An agent that creates and executes plans to accomplish complex goals"""
     
-    def __init__(self, config: AgentConfig):
-        super().__init__(config)
+    def __init__(self, config: AgentConfig, agent_id: Optional[str] = None):
+        super().__init__(config, agent_id)
         self.current_plan: Optional[Plan] = None
         self.execution_agents: Dict[str, BaseAgent] = {}
         

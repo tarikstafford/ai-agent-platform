@@ -13,8 +13,8 @@ from .base import BaseAgent, AgentConfig, AgentResponse, AgentState
 class ReactiveAgent(BaseAgent):
     """A reactive agent that can use tools to accomplish tasks"""
     
-    def __init__(self, config: AgentConfig):
-        super().__init__(config)
+    def __init__(self, config: AgentConfig, agent_id: Optional[str] = None):
+        super().__init__(config, agent_id)
         self.tool_instances: List[BaseTool] = []
         self.agent_executor: Optional[AgentExecutor] = None
         

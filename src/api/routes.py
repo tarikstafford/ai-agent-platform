@@ -231,3 +231,15 @@ def workflow_builder_ui():
     # Serve the workflow builder HTML
     dashboard_dir = os.path.join(os.path.dirname(__file__), '..', 'dashboard', 'static')
     return send_from_directory(dashboard_dir, 'workflow-builder.html')
+
+
+@dashboard_bp.route('/a2a')
+@dashboard_bp.route('/a2a/')
+def a2a_dashboard_ui():
+    """Serve A2A communication dashboard UI"""
+    from flask import send_from_directory
+    import os
+    
+    # Serve the A2A dashboard HTML
+    dashboard_dir = os.path.join(os.path.dirname(__file__), '..', 'dashboard', 'static')
+    return send_from_directory(dashboard_dir, 'a2a-dashboard.html')

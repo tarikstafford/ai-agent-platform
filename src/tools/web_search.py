@@ -29,11 +29,11 @@ class WebSearchTool(BaseTool):
     def __init__(self, config: Optional[ToolConfig] = None, api_key: Optional[str] = None):
         if not config:
             config = ToolConfig(
-                name=self.name,
-                description=self.description
+                name="web_search",
+                description="Search the web for information. Returns titles, URLs, and snippets of relevant pages."
             )
         super().__init__(config)
-        self.api_key = api_key
+        object.__setattr__(self, 'api_key', api_key)
         
     def execute(self, query: str, max_results: int = 5) -> Any:
         """Execute web search synchronously"""

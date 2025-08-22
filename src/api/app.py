@@ -24,6 +24,14 @@ except ImportError:
     langflow_bp = None
     LANGFLOW_ROUTES_AVAILABLE = False
 
+# Import A2A routes
+try:
+    from .a2a_routes import a2a_bp
+    A2A_ROUTES_AVAILABLE = True
+except ImportError:
+    a2a_bp = None
+    A2A_ROUTES_AVAILABLE = False
+
 
 def create_app(config: Optional[dict] = None) -> Flask:
     """Create Flask application with agent management"""
@@ -47,6 +55,10 @@ def create_app(config: Optional[dict] = None) -> Flask:
     # Register Langflow blueprint if available
     if LANGFLOW_ROUTES_AVAILABLE:
         app.register_blueprint(langflow_bp, url_prefix='/api/langflow')
+    
+    # Register A2A blueprint if available
+    if A2A_ROUTES_AVAILABLE:
+        app.register_blueprint(a2a_bp)
     
     # Setup WebSocket handlers
     setup_websocket_handlers(app)

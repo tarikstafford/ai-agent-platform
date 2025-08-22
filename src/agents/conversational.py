@@ -10,8 +10,8 @@ from .base import BaseAgent, AgentConfig, AgentResponse, AgentState
 class ConversationalAgent(BaseAgent):
     """A conversational agent that can engage in dialogue"""
     
-    def __init__(self, config: AgentConfig):
-        super().__init__(config)
+    def __init__(self, config: AgentConfig, agent_id: Optional[str] = None):
+        super().__init__(config, agent_id)
         self.conversation_history: List[Union[HumanMessage, AIMessage, SystemMessage]] = []
         self.system_prompt = f"""You are {config.name}, a helpful AI assistant.
 {config.description}
