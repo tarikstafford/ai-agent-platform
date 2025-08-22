@@ -595,6 +595,167 @@ Real-time updates and reactive patterns:
 - **Message Queues**: Asynchronous task processing
 - **Background Tasks**: Periodic maintenance and monitoring
 
+### 7. Sub-Agent Workflow Patterns (IMPORTANT FOR CLAUDE CODE)
+When implementing complex features or large-scale changes, use sub-agents to expedite workflow:
+
+**Pattern 1: Divide and Conquer with Task Agents**
+```python
+# Main Claude Code acts as coordinator
+# Creates specialized sub-agents for parallel execution
+
+# Example: Implementing a new feature across multiple files
+math_analysis_agent = Task("Analyze calculation requirements")
+api_implementation_agent = Task("Implement API endpoints")
+ui_creation_agent = Task("Create dashboard components")
+test_writing_agent = Task("Write comprehensive tests")
+
+# Execute concurrently for faster development
+await asyncio.gather(
+    math_analysis_agent.run(),
+    api_implementation_agent.run(),
+    ui_creation_agent.run(),
+    test_writing_agent.run()
+)
+```
+
+**Pattern 2: Search and Analysis Delegation**
+```python
+# When searching for patterns or analyzing codebase
+search_agent = Task("Find all instances of pattern X across codebase")
+analysis_agent = Task("Analyze usage patterns and dependencies")
+refactor_agent = Task("Propose refactoring approach")
+
+# Claude Code coordinates results
+search_results = await search_agent.run()
+analysis = await analysis_agent.run(search_results)
+refactoring_plan = await refactor_agent.run(analysis)
+```
+
+**Pattern 3: Multi-File Operations**
+```python
+# For changes affecting multiple files
+file_agents = []
+for file_path in affected_files:
+    agent = Task(f"Update {file_path} with new pattern")
+    file_agents.append(agent)
+
+# Parallel file updates
+results = await asyncio.gather(*[agent.run() for agent in file_agents])
+```
+
+**Pattern 4: Testing and Validation Workflows**
+```python
+# Comprehensive testing with specialized agents
+unit_test_agent = Task("Create unit tests for new functionality")
+integration_test_agent = Task("Design integration test scenarios")
+performance_test_agent = Task("Implement performance benchmarks")
+docs_agent = Task("Update documentation and examples")
+
+# Run testing workflow
+await execute_testing_workflow([
+    unit_test_agent,
+    integration_test_agent,
+    performance_test_agent,
+    docs_agent
+])
+```
+
+**Best Practices for Sub-Agent Usage:**
+
+1. **Task Decomposition**: Break complex tasks into independent, parallel subtasks
+   - File operations (read/write different files concurrently)
+   - Search operations (search for different patterns simultaneously)
+   - Analysis tasks (analyze different aspects of the codebase)
+   - Implementation tasks (implement different components in parallel)
+
+2. **Clear Task Boundaries**: Each sub-agent should have a specific, well-defined goal
+   ```python
+   # Good: Specific and measurable
+   Task("Find all React components using useState hook")
+   Task("Update all API endpoints to use new authentication")
+   
+   # Bad: Vague and unbounded
+   Task("Improve the codebase")
+   Task("Fix some bugs")
+   ```
+
+3. **Result Aggregation**: Main Claude Code should coordinate and merge sub-agent results
+   ```python
+   # Collect results from multiple search agents
+   all_matches = []
+   for result in search_results:
+       all_matches.extend(result.matches)
+   
+   # Synthesize analysis from multiple agents
+   final_report = synthesize_analyses(analysis_results)
+   ```
+
+4. **Error Handling**: Handle failures gracefully
+   ```python
+   results = await asyncio.gather(
+       *[agent.run() for agent in agents],
+       return_exceptions=True
+   )
+   
+   # Process successful results and handle failures
+   successful = [r for r in results if not isinstance(r, Exception)]
+   failed = [r for r in results if isinstance(r, Exception)]
+   ```
+
+5. **Performance Optimization**: Use sub-agents for operations that can be parallelized
+   - **Good candidates**: File I/O, search operations, independent analysis
+   - **Poor candidates**: Sequential operations, shared state modifications
+
+**Example: Complete Feature Implementation with Sub-Agents**
+```python
+# Claude Code orchestrating a complete feature addition
+async def implement_new_dashboard_feature():
+    # Phase 1: Research and Planning (Parallel)
+    research_tasks = [
+        Task("Research existing dashboard patterns"),
+        Task("Analyze current dashboard structure"),
+        Task("Identify integration points")
+    ]
+    research_results = await gather_tasks(research_tasks)
+    
+    # Phase 2: Implementation (Parallel)
+    implementation_tasks = [
+        Task("Create new React components"),
+        Task("Implement backend API endpoints"),
+        Task("Add database migrations"),
+        Task("Create utility functions")
+    ]
+    impl_results = await gather_tasks(implementation_tasks)
+    
+    # Phase 3: Testing and Documentation (Parallel)
+    finalization_tasks = [
+        Task("Write unit tests for all new code"),
+        Task("Create integration tests"),
+        Task("Update API documentation"),
+        Task("Add usage examples")
+    ]
+    final_results = await gather_tasks(finalization_tasks)
+    
+    # Phase 4: Integration (Sequential)
+    await integrate_all_changes(research_results, impl_results, final_results)
+```
+
+**When to Use Sub-Agents:**
+- Large refactoring operations affecting 10+ files
+- Comprehensive search and replace operations
+- Implementing features with multiple independent components
+- Creating test suites for complex functionality
+- Analyzing codebase for patterns or issues
+- Generating documentation from multiple sources
+
+**When NOT to Use Sub-Agents:**
+- Simple, single-file changes
+- Sequential operations that depend on previous results
+- Quick fixes or minor updates
+- Operations requiring shared state or coordination
+
+This sub-agent approach significantly speeds up development by parallelizing independent tasks while maintaining code quality and consistency through coordinated execution.
+
 ## Testing Strategy & Quality Assurance
 
 ### Test Organization
