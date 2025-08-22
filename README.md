@@ -11,9 +11,10 @@ A modern, extensible platform for building, hosting, and managing AI agents with
 - **Async Support**: Built with async/await for efficient concurrent operations
 
 ### 🌐 Hosting Platform
-- **Web Dashboard**: Modern web interface for managing agents
+- **Unified Dashboard**: Modern tabbed interface with navigation between all platform features
+- **Natural Language Agent Creation**: Create agents by describing what you want them to do
 - **REST API**: Complete API for agent creation, management, and interaction
-- **Real-time Monitoring**: Live metrics and status updates via WebSocket
+- **Real-time Monitoring**: Live metrics and status updates with interactive chat
 - **Agent Registry**: Centralized agent lifecycle management
 - **Persistence**: Agent configurations and state persistence
 
@@ -71,9 +72,34 @@ cp .env.example .env
 # Start the agent hosting platform
 python run_server.py --host 127.0.0.1 --port 8000
 
-# Access the web dashboard
-open http://127.0.0.1:8000/api/dashboard/ui
+# Access the unified dashboard
+open http://127.0.0.1:8000/api/dashboard/
 ```
+
+### Dashboard Features
+
+The unified dashboard provides access to all platform features through a tabbed interface:
+
+- **📊 Overview**: Platform statistics and quick actions
+- **🤖 Agents**: View, manage, and chat with your agents
+- **✨ Create Agent**: Natural language agent creation with prompt-to-agent conversion
+- **🎨 Workflow Builder**: Visual workflow creation with Langflow
+- **🔗 Agent Network**: A2A communication monitoring and management
+
+### Creating Agents with Natural Language
+
+Simply describe what you want your agent to do:
+
+```
+"Create a customer support agent that can handle billing inquiries, 
+answer product questions, and escalate complex issues to human support."
+```
+
+The system will automatically:
+- Determine the appropriate agent type
+- Configure necessary tools (calculator, web search, etc.)
+- Set up A2A communication capabilities
+- Generate an optimized system prompt
 
 ### Running Examples
 
