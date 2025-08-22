@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e2e8f0;
+        }
+
+        .card h2 {
+            color: #4a5568;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1rem;
+        }
+
+        .agent-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1rem;
+            border-left: 4px solid #4299e1;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .agent-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .agent-name {
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .agent-status {
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-running {
+            background-color: #48bb78;
+            color: white;
+        }
+
+        .status-idle {
+            background-color: #ed8936;
+            color: white;
+        }
+
+        .status-error {
+            background-color: #f56565;
+            color: white;
+        }
+
+        .status-stopped {
+            background-color: #a0aec0;
+            color: white;
+        }
+
+        .agent-details {
+            font-size: 0.9rem;
+            color: #718096;
+            margin-bottom: 1rem;
+        }
+
+        .agent-metrics {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.5rem;
+            font-size: 0.8rem;
+        }
+
+        .metric {
+            background: #f7fafc;
+            padding: 0.5rem;
+            border-radius: 4px;
+        }
+
+        .controls {
+            margin-top: 1rem;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: background-color 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #4299e1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #3182ce;
+        }
+
+        .btn-danger {
+            background-color: #f56565;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #e53e3e;
+        }
+
+        .btn-success {
+            background-color: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #38a169;
+        }
+
+        .create-agent-form {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 2rem;
+            color: #718096;
+        }
+
+        .error {
+            background-color: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .success {
+            background-color: #c6f6d5;
+            color: #2f855a;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI Agent Dashboard</h1>
+            <p class="subtitle">Manage and monitor your AI agents in real-time</p>
+        </header>
+
+        <div id="message-container"></div>
+
+        <!-- Statistics Overview -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="total-agents">0</div>
+                <div class="stat-label">Total Agents</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="running-agents">0</div>
+                <div class="stat-label">Running</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="total-requests">0</div>
+                <div class="stat-label">Total Requests</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="success-rate">0%</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+        </div>
+
+        <!-- Create Agent Form -->
+        <div class="create-agent-form">
+            <h2>Create New Agent</h2>
+            <form id="create-agent-form">
+                <div class="form-group">
+                    <label for="agent-type">Agent Type:</label>
+                    <select id="agent-type" required>
+                        <option value="conversational">Conversational</option>
+                        <option value="reactive">Reactive</option>
+                        <option value="planner">Planner</option>
+                        <option value="langflow">Visual Workflow</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="agent-name">Name:</label>
+                    <input type="text" id="agent-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="agent-description">Description:</label>
+                    <textarea id="agent-description" rows="2"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="agent-model">Model:</label>
+                    <select id="agent-model">
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="gpt-4">GPT-4</option>
+                    </select>
+                </div>
+                <div id="langflow-actions" style="display: none; margin-bottom: 1rem;">
+                    <a href="/api/dashboard/builder" class="btn btn-primary" style="text-decoration: none; margin-right: 0.5rem;">
+                        🎨 Open Visual Builder
+                    </a>
+                    <div style="font-size: 0.9rem; color: #718096; margin-top: 0.5rem;">
+                        Use the visual workflow builder to create complex agent workflows with drag-and-drop interface.
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Create Agent</button>
+            </form>
+        </div>
+
+        <!-- Agents List -->
+        <div class="card">
+            <h2>Active Agents</h2>
+            <div id="agents-container" class="agent-grid">
+                <div class="loading">Loading agents...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        // State management
+        let agents = [];
+        let dashboardData = {};
+
+        // DOM elements
+        const messageContainer = document.getElementById('message-container');
+        const agentsContainer = document.getElementById('agents-container');
+        const createAgentForm = document.getElementById('create-agent-form');
+
+        // Initialize dashboard
+        async function initDashboard() {
+            await loadDashboardData();
+            await loadAgents();
+            
+            // Set up auto-refresh
+            setInterval(loadDashboardData, 5000);
+            setInterval(loadAgents, 10000);
+        }
+
+        // Load dashboard overview data
+        async function loadDashboardData() {
+            try {
+                const response = await fetch(`${API_BASE}/dashboard/`);
+                const data = await response.json();
+                
+                if (data.overview) {
+                    dashboardData = data;
+                    updateStatistics(data.overview);
+                }
+            } catch (error) {
+                console.error('Failed to load dashboard data:', error);
+            }
+        }
+
+        // Load agents list
+        async function loadAgents() {
+            try {
+                const response = await fetch(`${API_BASE}/agents/`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    agents = data.agents;
+                    renderAgents();
+                }
+            } catch (error) {
+                console.error('Failed to load agents:', error);
+                showMessage('Failed to load agents', 'error');
+            }
+        }
+
+        // Update statistics display
+        function updateStatistics(overview) {
+            document.getElementById('total-agents').textContent = overview.total_agents || 0;
+            document.getElementById('running-agents').textContent = overview.running_agents || 0;
+            document.getElementById('total-requests').textContent = overview.total_requests || 0;
+            document.getElementById('success-rate').textContent = 
+                Math.round((overview.success_rate || 0) * 100) + '%';
+        }
+
+        // Render agents list
+        function renderAgents() {
+            if (agents.length === 0) {
+                agentsContainer.innerHTML = '<div class="loading">No agents found. Create your first agent above!</div>';
+                return;
+            }
+
+            agentsContainer.innerHTML = agents.map(agent => `
+                <div class="agent-card">
+                    <div class="agent-header">
+                        <div class="agent-name">${agent.name}</div>
+                        <div class="agent-status status-${agent.status}">${agent.status}</div>
+                    </div>
+                    <div class="agent-details">
+                        <div><strong>Type:</strong> ${agent.config?.model || 'Unknown'}</div>
+                        <div><strong>Description:</strong> ${agent.description || 'No description'}</div>
+                        <div><strong>Created:</strong> ${new Date(agent.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div class="agent-metrics">
+                        <div class="metric">
+                            <strong>Requests:</strong> ${agent.metrics?.total_requests || 0}
+                        </div>
+                        <div class="metric">
+                            <strong>Success:</strong> ${agent.metrics?.successful_requests || 0}
+                        </div>
+                        <div class="metric">
+                            <strong>Avg Time:</strong> ${(agent.metrics?.average_response_time || 0).toFixed(2)}s
+                        </div>
+                        <div class="metric">
+                            <strong>Uptime:</strong> ${formatUptime(agent.metrics?.uptime_seconds || 0)}
+                        </div>
+                    </div>
+                    <div class="controls">
+                        ${agent.status === 'running' || agent.status === 'idle' ? 
+                            `<button class="btn btn-danger" onclick="stopAgent('${agent.id}')">Stop</button>` :
+                            `<button class="btn btn-success" onclick="startAgent('${agent.id}')">Start</button>`
+                        }
+                        <button class="btn btn-primary" onclick="chatWithAgent('${agent.id}')">Chat</button>
+                        <button class="btn btn-danger" onclick="deleteAgent('${agent.id}')">Delete</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Format uptime in human readable format
+        function formatUptime(seconds) {
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            return `${hours}h ${minutes}m`;
+        }
+
+        // Agent control functions
+        async function startAgent(agentId) {
+            try {
+                const response = await fetch(`${API_BASE}/agents/${agentId}/start`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Agent started successfully', 'success');
+                    await loadAgents();
+                } else {
+                    showMessage(data.error || 'Failed to start agent', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to start agent', 'error');
+            }
+        }
+
+        async function stopAgent(agentId) {
+            try {
+                const response = await fetch(`${API_BASE}/agents/${agentId}/stop`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Agent stopped successfully', 'success');
+                    await loadAgents();
+                } else {
+                    showMessage(data.error || 'Failed to stop agent', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to stop agent', 'error');
+            }
+        }
+
+        async function deleteAgent(agentId) {
+            if (!confirm('Are you sure you want to delete this agent?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/agents/${agentId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Agent deleted successfully', 'success');
+                    await loadAgents();
+                } else {
+                    showMessage(data.error || 'Failed to delete agent', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to delete agent', 'error');
+            }
+        }
+
+        function chatWithAgent(agentId) {
+            const message = prompt('Enter your message:');
+            if (!message) return;
+
+            fetch(`${API_BASE}/agents/${agentId}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ message })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert(`Agent Response: ${data.content}`);
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            })
+            .catch(error => {
+                alert('Failed to send message to agent');
+            });
+        }
+
+        // Handle agent type change
+        document.getElementById('agent-type').addEventListener('change', function() {
+            const langflowActions = document.getElementById('langflow-actions');
+            if (this.value === 'langflow') {
+                langflowActions.style.display = 'block';
+            } else {
+                langflowActions.style.display = 'none';
+            }
+        });
+
+        // Create agent form handler
+        createAgentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const agentType = document.getElementById('agent-type').value;
+            
+            // If langflow type, redirect to visual builder
+            if (agentType === 'langflow') {
+                window.location.href = '/api/dashboard/builder';
+                return;
+            }
+            
+            const formData = {
+                type: agentType,
+                config: {
+                    name: document.getElementById('agent-name').value,
+                    model: document.getElementById('agent-model').value,
+                    description: document.getElementById('agent-description').value,
+                    temperature: 0.7,
+                    max_tokens: 2000
+                },
+                name: document.getElementById('agent-name').value,
+                description: document.getElementById('agent-description').value,
+                tools: agentType === 'reactive' ? ['calculator'] : []
+            };
+
+            try {
+                const response = await fetch(`${API_BASE}/agents/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    showMessage('Agent created successfully!', 'success');
+                    createAgentForm.reset();
+                    await loadAgents();
+                } else {
+                    showMessage(data.error || 'Failed to create agent', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to create agent', 'error');
+            }
+        });
+
+        // Show message function
+        function showMessage(text, type) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = text;
+            
+            messageContainer.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                messageContainer.removeChild(messageDiv);
+            }, 5000);
+        }
+
+        // Initialize dashboard when page loads
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+</html>

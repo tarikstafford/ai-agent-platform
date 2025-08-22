@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Workflow Builder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            color: #2d3748;
+            line-height: 1.6;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            margin: 0;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background-color 0.2s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-light {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-light:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-primary {
+            background-color: #4299e1;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #3182ce;
+        }
+
+        .btn-success {
+            background-color: #48bb78;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #38a169;
+        }
+
+        .main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 300px;
+            background: white;
+            border-right: 1px solid #e2e8f0;
+            padding: 1rem;
+            overflow-y: auto;
+        }
+
+        .workflow-canvas {
+            flex: 1;
+            position: relative;
+            background: #ffffff;
+            overflow: hidden;
+        }
+
+        .langflow-embed {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .template-card {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .template-card:hover {
+            background: #edf2f7;
+            border-color: #4299e1;
+        }
+
+        .template-card.selected {
+            background: #ebf8ff;
+            border-color: #4299e1;
+        }
+
+        .template-name {
+            font-weight: bold;
+            font-size: 0.9rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .template-desc {
+            font-size: 0.8rem;
+            color: #718096;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #e2e8f0;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            flex-direction: column;
+            color: #718096;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e2e8f0;
+            border-top: 4px solid #4299e1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background-color: #fed7d7;
+            color: #c53030;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .success {
+            background-color: #c6f6d5;
+            color: #2f855a;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .section {
+            margin-bottom: 1.5rem;
+        }
+
+        .section-title {
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 0.5rem;
+            color: #4a5568;
+        }
+
+        .workflow-info {
+            background: #f7fafc;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .status-running {
+            background-color: #48bb78;
+            color: white;
+        }
+
+        .status-stopped {
+            background-color: #a0aec0;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 500px;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        .modal-header {
+            margin-bottom: 1rem;
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            font-weight: bold;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: flex-end;
+            margin-top: 1rem;
+        }
+
+        .btn-secondary {
+            background-color: #a0aec0;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #718096;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 Visual Workflow Builder</h1>
+        <div class="header-actions">
+            <div id="langflow-status" class="status-badge status-stopped">Initializing</div>
+            <button id="save-workflow" class="btn btn-success" style="display: none;">Save Workflow</button>
+            <button id="test-workflow" class="btn btn-primary" style="display: none;">Test</button>
+            <a href="/api/dashboard/ui" class="btn btn-light">← Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="sidebar">
+            <div id="message-container"></div>
+
+            <!-- Workflow Creation -->
+            <div class="section" id="create-section">
+                <div class="section-title">Create New Workflow</div>
+                
+                <form id="workflow-form">
+                    <div class="form-group">
+                        <label for="workflow-name">Workflow Name:</label>
+                        <input type="text" id="workflow-name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="workflow-description">Description:</label>
+                        <textarea id="workflow-description"></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Template:</label>
+                        <div id="templates-container" class="template-grid">
+                            <div class="template-card" data-template="">
+                                <div class="template-name">Empty Workflow</div>
+                                <div class="template-desc">Start with a blank canvas</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Create Workflow</button>
+                </form>
+            </div>
+
+            <!-- Current Workflow Info -->
+            <div class="section" id="workflow-info-section" style="display: none;">
+                <div class="section-title">Current Workflow</div>
+                <div id="workflow-info" class="workflow-info"></div>
+                
+                <div style="margin-top: 1rem;">
+                    <button id="create-agent-btn" class="btn btn-success" style="width: 100%; margin-bottom: 0.5rem;">Create Agent</button>
+                    <button id="export-workflow-btn" class="btn btn-secondary" style="width: 100%;">Export Workflow</button>
+                </div>
+            </div>
+
+            <!-- Existing Workflows -->
+            <div class="section">
+                <div class="section-title">Existing Workflows</div>
+                <div id="workflows-list"></div>
+            </div>
+        </div>
+
+        <div class="workflow-canvas">
+            <div id="loading-container" class="loading">
+                <div class="loading-spinner"></div>
+                <div>Initializing Langflow...</div>
+            </div>
+            
+            <iframe id="langflow-iframe" class="langflow-embed" style="display: none;"></iframe>
+        </div>
+    </div>
+
+    <!-- Create Agent Modal -->
+    <div id="create-agent-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div class="modal-title">Create Agent from Workflow</div>
+            </div>
+            <form id="create-agent-form">
+                <div class="form-group">
+                    <label for="agent-name">Agent Name:</label>
+                    <input type="text" id="agent-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="agent-description">Description:</label>
+                    <textarea id="agent-description"></textarea>
+                </div>
+                <input type="hidden" id="agent-flow-id">
+            </form>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="createAgent()">Create Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        let currentFlowId = null;
+        let langflowStatus = { available: false, server_running: false };
+
+        // Initialize the workflow builder
+        async function initialize() {
+            try {
+                await checkLangflowStatus();
+                await loadTemplates();
+                await loadWorkflows();
+                
+                if (!langflowStatus.server_running) {
+                    await initializeLangflow();
+                }
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showMessage('Failed to initialize workflow builder', 'error');
+            }
+        }
+
+        // Check Langflow status
+        async function checkLangflowStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/langflow/status`);
+                langflowStatus = await response.json();
+                
+                updateStatusDisplay();
+            } catch (error) {
+                console.error('Status check error:', error);
+            }
+        }
+
+        // Initialize Langflow server
+        async function initializeLangflow() {
+            try {
+                showMessage('Initializing Langflow server...', 'info');
+                
+                const response = await fetch(`${API_BASE}/langflow/initialize`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    langflowStatus.server_running = true;
+                    updateStatusDisplay();
+                    showMessage('Langflow initialized successfully!', 'success');
+                    
+                    // Load Langflow interface
+                    setTimeout(() => {
+                        loadLangflowInterface(result.builder_url);
+                    }, 2000);
+                } else {
+                    showMessage(`Failed to initialize: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to initialize Langflow', 'error');
+            }
+        }
+
+        // Load Langflow interface
+        function loadLangflowInterface(builderUrl) {
+            const iframe = document.getElementById('langflow-iframe');
+            const loading = document.getElementById('loading-container');
+            
+            iframe.src = builderUrl;
+            iframe.style.display = 'block';
+            loading.style.display = 'none';
+            
+            document.getElementById('save-workflow').style.display = 'inline-block';
+            document.getElementById('test-workflow').style.display = 'inline-block';
+        }
+
+        // Update status display
+        function updateStatusDisplay() {
+            const statusEl = document.getElementById('langflow-status');
+            
+            if (langflowStatus.available && langflowStatus.server_running) {
+                statusEl.textContent = 'Running';
+                statusEl.className = 'status-badge status-running';
+            } else {
+                statusEl.textContent = 'Stopped';
+                statusEl.className = 'status-badge status-stopped';
+            }
+        }
+
+        // Load templates
+        async function loadTemplates() {
+            try {
+                const response = await fetch(`${API_BASE}/langflow/templates`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderTemplates(data.templates);
+                }
+            } catch (error) {
+                console.error('Error loading templates:', error);
+            }
+        }
+
+        // Render templates
+        function renderTemplates(templates) {
+            const container = document.getElementById('templates-container');
+            
+            // Keep the empty template card
+            const emptyCard = container.querySelector('[data-template=""]');
+            container.innerHTML = '';
+            container.appendChild(emptyCard);
+            
+            // Add template cards
+            Object.entries(templates).forEach(([key, template]) => {
+                const card = document.createElement('div');
+                card.className = 'template-card';
+                card.dataset.template = key;
+                card.innerHTML = `
+                    <div class="template-name">${template.name}</div>
+                    <div class="template-desc">${template.description}</div>
+                `;
+                container.appendChild(card);
+            });
+            
+            // Add click handlers
+            container.querySelectorAll('.template-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    container.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                });
+            });
+        }
+
+        // Load existing workflows
+        async function loadWorkflows() {
+            try {
+                const response = await fetch(`${API_BASE}/langflow/workflows`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    renderWorkflows(data.server_flows, data.local_workflows);
+                }
+            } catch (error) {
+                console.error('Error loading workflows:', error);
+            }
+        }
+
+        // Render workflows list
+        function renderWorkflows(serverFlows, localWorkflows) {
+            const container = document.getElementById('workflows-list');
+            container.innerHTML = '';
+            
+            if (serverFlows.length === 0 && localWorkflows.length === 0) {
+                container.innerHTML = '<div style="color: #718096; font-size: 0.8rem;">No workflows found</div>';
+                return;
+            }
+            
+            // Server flows
+            serverFlows.forEach(flow => {
+                const item = document.createElement('div');
+                item.className = 'template-card';
+                item.innerHTML = `
+                    <div class="template-name">${flow.name}</div>
+                    <div class="template-desc">${flow.description || 'Server workflow'}</div>
+                `;
+                item.addEventListener('click', () => loadWorkflow(flow.id));
+                container.appendChild(item);
+            });
+            
+            // Local workflows
+            localWorkflows.forEach(workflow => {
+                const item = document.createElement('div');
+                item.className = 'template-card';
+                item.innerHTML = `
+                    <div class="template-name">${workflow.title}</div>
+                    <div class="template-desc">${workflow.description || 'Local workflow'}</div>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        // Load specific workflow
+        async function loadWorkflow(flowId) {
+            try {
+                const response = await fetch(`${API_BASE}/langflow/workflows/${flowId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentFlowId = flowId;
+                    updateWorkflowInfo(data.workflow);
+                    
+                    // Load in iframe
+                    const iframe = document.getElementById('langflow-iframe');
+                    iframe.src = data.editor_config.editor_url;
+                    
+                    showMessage('Workflow loaded successfully', 'success');
+                } else {
+                    showMessage('Failed to load workflow', 'error');
+                }
+            } catch (error) {
+                showMessage('Error loading workflow', 'error');
+            }
+        }
+
+        // Update workflow info display
+        function updateWorkflowInfo(workflow) {
+            const infoEl = document.getElementById('workflow-info');
+            const sectionEl = document.getElementById('workflow-info-section');
+            
+            infoEl.innerHTML = `
+                <div><strong>Name:</strong> ${workflow.name}</div>
+                <div><strong>Description:</strong> ${workflow.description || 'No description'}</div>
+                <div><strong>Flow ID:</strong> ${currentFlowId}</div>
+            `;
+            
+            sectionEl.style.display = 'block';
+            document.getElementById('create-section').style.display = 'none';
+        }
+
+        // Create new workflow
+        document.getElementById('workflow-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const name = document.getElementById('workflow-name').value;
+            const description = document.getElementById('workflow-description').value;
+            const selectedTemplate = document.querySelector('.template-card.selected');
+            const template = selectedTemplate ? selectedTemplate.dataset.template : '';
+            
+            try {
+                const response = await fetch(`${API_BASE}/langflow/workflows`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        template: template || undefined
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentFlowId = result.flow_id;
+                    showMessage('Workflow created successfully!', 'success');
+                    
+                    // Load the new workflow
+                    const iframe = document.getElementById('langflow-iframe');
+                    iframe.src = result.editor_config.editor_url;
+                    
+                    updateWorkflowInfo({ name, description });
+                    document.getElementById('workflow-form').reset();
+                    await loadWorkflows();
+                } else {
+                    showMessage(`Failed to create workflow: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error creating workflow', 'error');
+            }
+        });
+
+        // Create agent from workflow
+        document.getElementById('create-agent-btn').addEventListener('click', () => {
+            if (!currentFlowId) {
+                showMessage('No workflow selected', 'error');
+                return;
+            }
+            
+            document.getElementById('agent-flow-id').value = currentFlowId;
+            document.getElementById('create-agent-modal').style.display = 'block';
+        });
+
+        // Close modal
+        function closeModal() {
+            document.getElementById('create-agent-modal').style.display = 'none';
+        }
+
+        // Create agent
+        async function createAgent() {
+            const name = document.getElementById('agent-name').value;
+            const description = document.getElementById('agent-description').value;
+            const flowId = document.getElementById('agent-flow-id').value;
+            
+            if (!name) {
+                showMessage('Agent name is required', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/langflow/agents`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name,
+                        description,
+                        flow_id: flowId,
+                        tags: ['langflow', 'visual-workflow']
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showMessage('Agent created successfully!', 'success');
+                    closeModal();
+                    
+                    // Clear form
+                    document.getElementById('create-agent-form').reset();
+                    
+                    // Redirect to main dashboard
+                    setTimeout(() => {
+                        window.location.href = '/api/dashboard/ui';
+                    }, 2000);
+                } else {
+                    showMessage(`Failed to create agent: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showMessage('Error creating agent', 'error');
+            }
+        }
+
+        // Export workflow
+        document.getElementById('export-workflow-btn').addEventListener('click', async () => {
+            if (!currentFlowId) {
+                showMessage('No workflow selected', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/langflow/workflows/${currentFlowId}/export`);
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Download as JSON file
+                    const blob = new Blob([JSON.stringify(result.workflow_data, null, 2)], {
+                        type: 'application/json'
+                    });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `workflow_${currentFlowId}.json`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    showMessage('Workflow exported successfully', 'success');
+                } else {
+                    showMessage('Failed to export workflow', 'error');
+                }
+            } catch (error) {
+                showMessage('Error exporting workflow', 'error');
+            }
+        });
+
+        // Show message function
+        function showMessage(text, type) {
+            const messageContainer = document.getElementById('message-container');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type;
+            messageDiv.textContent = text;
+            
+            messageContainer.appendChild(messageDiv);
+            
+            setTimeout(() => {
+                if (messageContainer.contains(messageDiv)) {
+                    messageContainer.removeChild(messageDiv);
+                }
+            }, 5000);
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', initialize);
+
+        // Close modal when clicking outside
+        window.addEventListener('click', (e) => {
+            const modal = document.getElementById('create-agent-modal');
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>
