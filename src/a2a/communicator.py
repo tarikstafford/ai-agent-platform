@@ -132,6 +132,9 @@ class A2ACommunicator:
         message_store = get_message_store()
         if message_store:
             message_store.log_message(message, MessageDirection.OUTBOUND)
+            
+            # Broadcast to WebSocket clients for live feed
+            await self._broadcast_message_to_websockets(message, MessageDirection.OUTBOUND)
         
         # Create delivery tracking
         delivery = MessageDelivery(
@@ -202,6 +205,9 @@ class A2ACommunicator:
         message_store = get_message_store()
         if message_store:
             message_store.log_message(message, MessageDirection.INBOUND)
+            
+            # Broadcast to WebSocket clients for live feed
+            await self._broadcast_message_to_websockets(message, MessageDirection.INBOUND)
         
         # Trace message received
         tracer = get_tracer()
@@ -515,3 +521,45 @@ class A2ACommunicator:
             except Exception as e:
                 self.logger.error("Heartbeat error", error=str(e))
                 await asyncio.sleep(60)
+    
+    async def _broadcast_message_to_websockets(self, message: A2AMessage, direction: MessageDirection):
+        """Broadcast message to WebSocket clients for live inspector feed"""
+        try:
+            # Import here to avoid circular imports
+            from flask import current_app
+            
+            if hasattr(current_app, 'socketio'):
+                # Create message data for WebSocket broadcast
+                message_data = {
+                    "id": message.id,
+                    "timestamp": message.timestamp.isoformat(),
+                    "direction": direction.value,
+                    "type": message.type.value if hasattr(message.type, 'value') else str(message.type),
+                    "sender_id": message.sender_id,
+                    "recipient_id": message.recipient_id,
+                    "correlation_id": message.correlation_id,
+                    "priority": message.priority,
+                    "ttl_seconds": message.ttl_seconds,
+                    "payload_summary": str(message.payload)[:200] + "..." if len(str(message.payload)) > 200 else str(message.payload),
+                    "size_bytes": len(str(message.payload).encode('utf-8'))
+                }
+                
+                # Broadcast to all A2A message stream subscribers
+                current_app.socketio.emit('new_a2a_message', message_data, room='a2a_messages')
+                
+                # Also emit message stats update periodically
+                if hasattr(self, '_last_stats_broadcast'):
+                    import time
+                    if time.time() - self._last_stats_broadcast > 5:  # Every 5 seconds
+                        message_store = get_message_store()
+                        if message_store:
+                            stats = message_store.get_stats()
+                            current_app.socketio.emit('message_stats_update', stats, room='a2a_messages')
+                        self._last_stats_broadcast = time.time()
+                else:
+                    import time
+                    self._last_stats_broadcast = time.time()
+                    
+        except Exception as e:
+            # Don't let WebSocket errors break message processing
+            self.logger.warning("Failed to broadcast message to WebSocket clients", error=str(e))
