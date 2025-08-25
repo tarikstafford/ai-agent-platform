@@ -221,17 +221,35 @@ class AgentManager:
                 with open(config_file, 'r') as f:
                     config_data = json.load(f)
                 
-                agent_id = await self.create_agent(
-                    agent_type=config_data["type"],
-                    config=config_data["config"],
-                    tools=config_data.get("tools", []),
-                    name=config_data.get("name"),
-                    description=config_data.get("description", ""),
-                    tags=config_data.get("tags", []),
-                    auto_start=False
-                )
+                # Check if agent with same name and config already exists to prevent duplicates
+                agent_name = config_data.get("name")
+                agent_config = config_data["config"]
                 
-                self.logger.info("Loaded saved agent", agent_id=agent_id, config_file=config_file.name)
+                # Check existing agents for duplicates
+                existing_agent = None
+                for existing_id, registration in self.registry.agents.items():
+                    if (registration.name == agent_name and 
+                        registration.config.model_dump() == agent_config):
+                        existing_agent = existing_id
+                        self.logger.info("Skipping duplicate agent", 
+                                       agent_name=agent_name, 
+                                       existing_id=existing_id,
+                                       config_file=config_file.name)
+                        break
+                
+                # Only create if not duplicate
+                if not existing_agent:
+                    agent_id = await self.create_agent(
+                        agent_type=config_data["type"],
+                        config=config_data["config"],
+                        tools=config_data.get("tools", []),
+                        name=agent_name,
+                        description=config_data.get("description", ""),
+                        tags=config_data.get("tags", []),
+                        auto_start=False
+                    )
+                    
+                    self.logger.info("Loaded saved agent", agent_id=agent_id, config_file=config_file.name)
                 
             except Exception as e:
                 self.logger.error("Failed to load agent config", config_file=config_file.name, error=str(e))

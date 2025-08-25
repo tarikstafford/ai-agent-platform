@@ -31,7 +31,7 @@ class LangflowServer:
             
             # Start Langflow server
             cmd = [
-                "python", "-m", "langflow", "run",
+                "python3", "-m", "langflow", "run",
                 "--host", self.host,
                 "--port", str(self.port),
                 "--no-open-browser"
@@ -49,9 +49,28 @@ class LangflowServer:
                 if self.is_running():
                     self.logger.info("Langflow server started successfully")
                     return True
+                
+                # Check if process has terminated
+                if self.process.poll() is not None:
+                    # Process has terminated, get error output
+                    stdout, stderr = self.process.communicate()
+                    self.logger.error("Langflow process terminated", 
+                                    stdout=stdout, 
+                                    stderr=stderr,
+                                    return_code=self.process.returncode)
+                    return False
+                    
                 await asyncio.sleep(1)
             
-            self.logger.error("Langflow server failed to start")
+            # If we get here, timeout occurred
+            self.logger.error("Langflow server failed to start (timeout)")
+            if self.process:
+                # Try to get any output
+                try:
+                    stdout, stderr = self.process.communicate(timeout=1)
+                    self.logger.error("Process output", stdout=stdout, stderr=stderr)
+                except:
+                    pass
             return False
             
         except Exception as e:

@@ -1,0 +1,21 @@
+{
+  "type": "conversational",
+  "config": {
+    "name": "TestAgent",
+    "description": "Test deduplication",
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "max_tokens": 2000,
+    "max_iterations": 10,
+    "timeout_seconds": 300,
+    "tools": [],
+    "memory_enabled": true,
+    "verbose": false,
+    "a2a_enabled": true,
+    "a2a_capabilities": []
+  },
+  "tools": [],
+  "name": "TestAgent",
+  "description": "",
+  "tags": []
+}
