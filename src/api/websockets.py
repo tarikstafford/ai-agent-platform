@@ -4,6 +4,21 @@ import json
 from typing import Dict, Any
 import structlog
 
+import sys
+from pathlib import Path
+
+# Add src to path if not already there
+src_path = str(Path(__file__).parent.parent)
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+try:
+    from a2a.message_store import get_message_store
+except ImportError:
+    # Fallback if a2a module not available
+    def get_message_store():
+        return None
+
 logger = structlog.get_logger()
 
 
@@ -101,6 +116,73 @@ def setup_websocket_handlers(app: Flask) -> SocketIO:
         except Exception as e:
             emit('error', {'message': str(e)})
     
+    # A2A Message Inspector WebSocket Handlers
+    
+    @socketio.on('join_a2a_messages')
+    def handle_join_a2a_messages():
+        """Join A2A message stream room"""
+        join_room('a2a_messages')
+        logger.info("Client joined A2A message stream")
+        
+        # Send recent messages as initial data
+        try:
+            message_store = get_message_store()
+            if message_store:
+                recent_messages = message_store.get_recent_messages(limit=20)
+                emit('a2a_messages_initial', {
+                    'messages': [msg.to_dict() for msg in recent_messages]
+                })
+        except Exception as e:
+            emit('error', {'message': f'Failed to get recent messages: {str(e)}'})
+    
+    @socketio.on('leave_a2a_messages')
+    def handle_leave_a2a_messages():
+        """Leave A2A message stream room"""
+        leave_room('a2a_messages')
+        logger.info("Client left A2A message stream")
+    
+    @socketio.on('subscribe_message_filters')
+    def handle_subscribe_message_filters(data):
+        """Subscribe to filtered message stream"""
+        try:
+            # Join filtered room with specific filters
+            filters = data.get('filters', {})
+            filter_hash = hash(json.dumps(filters, sort_keys=True))
+            room = f'a2a_filtered_{filter_hash}'
+            
+            join_room(room)
+            logger.info("Client subscribed to filtered A2A messages", filters=filters)
+            
+            # Send filtered recent messages
+            message_store = get_message_store()
+            if message_store:
+                filtered_messages = message_store.search_messages(
+                    sender_id=filters.get('sender_id'),
+                    recipient_id=filters.get('recipient_id'),
+                    message_type=filters.get('type'),
+                    limit=20
+                )
+                emit('a2a_filtered_initial', {
+                    'messages': [msg.to_dict() for msg in filtered_messages],
+                    'filters': filters
+                })
+                
+        except Exception as e:
+            emit('error', {'message': f'Failed to subscribe to filtered messages: {str(e)}'})
+    
+    @socketio.on('get_message_stats')
+    def handle_get_message_stats():
+        """Get current message store statistics"""
+        try:
+            message_store = get_message_store()
+            if message_store:
+                stats = message_store.get_stats()
+                emit('message_stats', stats)
+            else:
+                emit('error', {'message': 'Message store not available'})
+        except Exception as e:
+            emit('error', {'message': f'Failed to get message stats: {str(e)}'})
+    
     # Store socketio instance on app for broadcasting
     app.socketio = socketio
     
@@ -117,3 +199,19 @@ def broadcast_dashboard_update(app: Flask, dashboard_data: Dict[str, Any]):
     """Broadcast dashboard update to dashboard clients"""
     if hasattr(app, 'socketio'):
         app.socketio.emit('dashboard_update', dashboard_data, room='dashboard')
+
+
+def broadcast_a2a_message(app: Flask, message_data: Dict[str, Any]):
+    """Broadcast new A2A message to subscribed clients"""
+    if hasattr(app, 'socketio'):
+        # Broadcast to general A2A message stream
+        app.socketio.emit('new_a2a_message', message_data, room='a2a_messages')
+        
+        # Also broadcast to specific filtered rooms if applicable
+        # This would require implementing filter matching logic
+
+
+def broadcast_message_stats_update(app: Flask, stats_data: Dict[str, Any]):
+    """Broadcast message store statistics update"""
+    if hasattr(app, 'socketio'):
+        app.socketio.emit('message_stats_update', stats_data, room='a2a_messages')
