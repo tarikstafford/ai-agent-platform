@@ -1019,3 +1019,159 @@ async def get_trace_stats():
     except Exception as e:
         logger.error("Error getting trace stats", error=str(e))
         return jsonify({"error": str(e)}), 500
+
+
+# Message Inspector Configuration and Management Endpoints
+
+@a2a_bp.route('/inspector/config', methods=['GET'])
+def get_inspector_config():
+    """Get current message inspector configuration"""
+    try:
+        from config.message_inspector import get_config
+        
+        config = get_config()
+        
+        return jsonify({
+            "success": True,
+            "config": {
+                "max_messages": config.max_messages,
+                "max_age_hours": config.max_age_hours,
+                "payload_summary_length": config.payload_summary_length,
+                "allow_full_payload": config.allow_full_payload,
+                "persistent_storage": config.persistent_storage,
+                "sqlite_path": config.sqlite_path,
+                "enable_sampling": config.enable_sampling,
+                "sampling_rate": config.sampling_rate,
+                "require_auth": config.require_auth,
+                "admin_role_required": config.admin_role_required,
+                "export_enabled": config.export_enabled,
+                "max_export_messages": config.max_export_messages,
+                "replay_enabled": config.replay_enabled,
+                "replay_rate_limit": config.replay_rate_limit,
+                "stream_enabled": config.stream_enabled,
+                "stream_buffer_size": config.stream_buffer_size
+            }
+        })
+    
+    except Exception as e:
+        logger.error("Error getting inspector config", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/inspector/config', methods=['PUT'])
+def update_inspector_config():
+    """Update message inspector configuration"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "Request data is required"}), 400
+        
+        # TODO: Implement config update logic
+        # This would require restarting the message store with new config
+        # For security, this might be restricted to admin users only
+        
+        return jsonify({
+            "success": False,
+            "error": "Configuration updates require platform restart"
+        }), 501
+    
+    except Exception as e:
+        logger.error("Error updating inspector config", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/inspector/clear', methods=['DELETE'])
+def clear_message_buffer():
+    """Clear the message buffer (admin only)"""
+    try:
+        # TODO: Add authentication/authorization check here
+        # if not has_admin_permission():
+        #     return jsonify({"error": "Admin permission required"}), 403
+        
+        message_store = get_message_store()
+        if not message_store:
+            return jsonify({"error": "Message store not available"}), 503
+        
+        # Get current stats before clearing
+        stats_before = message_store.get_stats()
+        messages_before = stats_before.get('memory_messages', 0)
+        
+        # Clear the in-memory buffer
+        with message_store._lock:
+            message_store._messages.clear()
+            message_store._messages_by_id.clear()
+        
+        # Update stats
+        message_store._stats['messages_dropped'] += messages_before
+        
+        logger.info("Message buffer cleared", messages_cleared=messages_before)
+        
+        return jsonify({
+            "success": True,
+            "messages_cleared": messages_before,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error("Error clearing message buffer", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/inspector/health', methods=['GET'])
+def get_inspector_health():
+    """Get health status of message inspector components"""
+    try:
+        health_status = {
+            "message_store": False,
+            "websocket_support": False,
+            "persistent_storage": False,
+            "configuration": False,
+            "overall_status": "unhealthy"
+        }
+        
+        # Check message store
+        message_store = get_message_store()
+        if message_store:
+            health_status["message_store"] = True
+            
+            # Check persistent storage
+            if message_store._sqlite_conn:
+                try:
+                    cursor = message_store._sqlite_conn.cursor()
+                    cursor.execute("SELECT 1")
+                    health_status["persistent_storage"] = True
+                except Exception:
+                    pass
+        
+        # Check WebSocket support
+        from flask import current_app
+        if hasattr(current_app, 'socketio'):
+            health_status["websocket_support"] = True
+        
+        # Check configuration
+        try:
+            from config.message_inspector import get_config
+            config = get_config()
+            if config:
+                health_status["configuration"] = True
+        except Exception:
+            pass
+        
+        # Determine overall status
+        components_healthy = sum(health_status[key] for key in health_status if key != "overall_status")
+        if components_healthy >= 3:
+            health_status["overall_status"] = "healthy"
+        elif components_healthy >= 2:
+            health_status["overall_status"] = "degraded"
+        
+        status_code = 200 if health_status["overall_status"] == "healthy" else 503
+        
+        return jsonify({
+            "success": True,
+            "health": health_status,
+            "timestamp": datetime.now().isoformat()
+        }), status_code
+    
+    except Exception as e:
+        logger.error("Error checking inspector health", error=str(e))
+        return jsonify({"error": str(e)}), 500

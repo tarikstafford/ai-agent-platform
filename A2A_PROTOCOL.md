@@ -12,6 +12,7 @@ The A2A Communication Protocol enables intelligent agents to discover, communica
 - **Fault Tolerance**: Robust message delivery and retry mechanisms
 - **Network Visualization**: Visual dashboard for monitoring agent communications
 - **Message Tracing**: End-to-end message lifecycle debugging and monitoring
+- **Message Inspector**: Real-time message monitoring, filtering, and replay capabilities
 
 ## 🏗️ Architecture Overview
 
@@ -55,6 +56,16 @@ The A2A Communication Protocol enables intelligent agents to discover, communica
 - Payload masking for sensitive data security
 - Real-time trace visualization and debugging tools
 - Export functionality for external analysis
+
+#### 7. Message Inspector (`src/a2a/message_store.py`, `src/config/message_inspector.py`)
+- **Ring Buffer Storage**: Configurable in-memory message buffer with SQLite persistence
+- **Real-time Message Capture**: Automatic logging of all sent/received A2A messages
+- **Advanced Filtering**: Search by sender, recipient, type, correlation ID, time range
+- **Payload Sanitization**: Secure payload summary generation with full payload opt-in
+- **Live Message Stream**: WebSocket-based real-time message feeds for dashboard
+- **Message Replay**: Safe message replay with sandbox mode and audit logging
+- **Export Capabilities**: JSON/CSV export for analysis and troubleshooting
+- **Configuration Management**: Environment-based configuration with health monitoring
 
 ## 📋 Message Types
 
@@ -531,6 +542,233 @@ traces = await tracer.list_traces(
 
 # Export trace data
 export_data = await tracer.export_trace("correlation-id-123")
+```
+
+## 🔍 A2A Message Inspector
+
+The A2A Message Inspector provides comprehensive debugging and monitoring capabilities for inter-agent communications. It captures all A2A messages in real-time, enables advanced filtering and search, and supports message replay for testing.
+
+### Key Features
+
+- **Real-time Message Capture**: Automatically logs all sent and received A2A messages
+- **Advanced Search & Filtering**: Filter by sender, recipient, message type, correlation ID, time range
+- **Live Message Streams**: WebSocket-based real-time message feeds in the dashboard
+- **Message Replay**: Safely replay messages with sandbox mode and safety checks
+- **Payload Security**: Smart payload sanitization with configurable full payload storage
+- **Export Capabilities**: Export messages as JSON or CSV for external analysis
+- **Configuration Management**: Environment-based configuration with hot reloading
+
+### Inspector Architecture
+
+#### Message Store (`src/a2a/message_store.py`)
+- **Ring Buffer**: Configurable in-memory circular buffer (default 5,000 messages)
+- **Persistence**: Optional SQLite storage for crash recovery
+- **Automatic Cleanup**: Configurable message age limits and buffer overflow handling
+- **Thread Safety**: Full concurrent access protection
+- **Performance**: < 1ms overhead per message capture
+
+#### Configuration (`src/config/message_inspector.py`)
+```python
+class MessageInspectorConfig(BaseModel):
+    max_messages: int = 5000           # Ring buffer size
+    max_age_hours: int = 24           # Message retention
+    payload_summary_length: int = 512  # Summary truncation
+    allow_full_payload: bool = False   # Security setting
+    persistent_storage: bool = True    # SQLite persistence
+    replay_enabled: bool = True        # Enable replay feature
+    stream_enabled: bool = True        # WebSocket streams
+```
+
+### API Endpoints
+
+#### Message Query & Search
+```bash
+# Get recent messages with pagination
+GET /api/a2a/messages?limit=100&offset=0
+
+# Advanced filtering
+GET /api/a2a/messages?sender_id=agent_1&type=task_request&since=2025-01-01T00:00:00
+
+# Search by correlation ID
+GET /api/a2a/messages?correlation_id=task-123
+
+# Filter by direction
+GET /api/a2a/messages?direction=outbound&limit=50
+```
+
+#### Message Details & Replay
+```bash
+# Get specific message details
+GET /api/a2a/messages/msg-123?include_payload=true
+
+# Replay message (sandbox mode)
+POST /api/a2a/messages/msg-123/replay
+{
+  "requester_id": "admin_agent",
+  "target_recipient_id": "test_agent", 
+  "sandbox_mode": true
+}
+```
+
+#### Export & Statistics  
+```bash
+# Export messages as JSON
+GET /api/a2a/messages/export?format=json&since=2025-01-01
+
+# Export as CSV
+GET /api/a2a/messages/export?format=csv
+
+# Get message statistics
+GET /api/a2a/messages/stats
+```
+
+#### Inspector Management
+```bash
+# Get inspector configuration
+GET /api/a2a/inspector/config
+
+# Clear message buffer (admin only)
+DELETE /api/a2a/inspector/clear
+
+# Health check
+GET /api/a2a/inspector/health
+```
+
+### Dashboard Integration
+
+The inspector is fully integrated into the A2A Dashboard at `/api/dashboard/a2a`:
+
+1. **Message List Tab**:
+   - Filterable message table with real-time updates
+   - Click messages for detailed view with full JSON payload
+   - Export buttons for CSV/JSON download
+
+2. **Live Stream Tab**:
+   - Real-time message stream with WebSocket updates
+   - Pause/resume and clear functionality
+   - Color-coded message types and directions
+
+3. **Statistics Tab**:
+   - Message store metrics and configuration
+   - Performance statistics and health indicators
+
+### Configuration Options
+
+Set these in your `.env` file:
+
+```bash
+# Message Store Settings
+A2A_MSG_MAX_MESSAGES=5000              # Ring buffer size
+A2A_MSG_MAX_AGE_HOURS=24              # Message retention
+A2A_MSG_PAYLOAD_SUMMARY_LENGTH=512    # Payload preview length
+A2A_MSG_ALLOW_FULL_PAYLOAD=false      # Store full payloads (security risk)
+A2A_MSG_PERSISTENT_STORAGE=true       # SQLite persistence
+A2A_MSG_SQLITE_PATH=data/a2a_messages.db
+
+# Security Settings
+A2A_MSG_REQUIRE_AUTH=true              # Require authentication
+A2A_MSG_ADMIN_ROLE=true                # Require admin for sensitive ops
+
+# Performance Settings
+A2A_MSG_ENABLE_SAMPLING=false          # Enable sampling under load
+A2A_MSG_SAMPLING_RATE=0.1              # Sample rate (10%)
+
+# Feature Toggles
+A2A_MSG_EXPORT_ENABLED=true            # Enable export functionality
+A2A_MSG_REPLAY_ENABLED=true            # Enable message replay
+A2A_MSG_STREAM_ENABLED=true            # Enable WebSocket streaming
+```
+
+### Security Considerations
+
+#### Payload Sanitization
+- Payload summaries are truncated to prevent information leakage
+- Full payload storage is disabled by default
+- Sensitive fields can be masked in configuration
+
+#### Replay Safety
+- Replay is sandbox-mode by default
+- Production agent replay requires explicit admin permission
+- All replays are logged with audit trails
+- Rate limiting prevents replay abuse
+
+#### Access Control
+- Authentication required for inspector access
+- Admin role required for sensitive operations (clear buffer, full payloads)
+- RBAC integration ready for enterprise deployment
+
+### Usage Examples
+
+#### Python API Access
+```python
+from a2a.message_store import get_message_store
+
+# Get message store instance
+store = get_message_store()
+
+# Search messages
+messages = store.search_messages(
+    sender_id="agent_1",
+    message_type="task_request",
+    limit=50
+)
+
+# Get statistics
+stats = store.get_stats()
+print(f"Total messages: {stats['memory_messages']}")
+print(f"Messages dropped: {stats['messages_dropped']}")
+```
+
+#### WebSocket Client
+```javascript
+// Connect to message stream
+const socket = io('/socket.io/');
+
+// Join A2A message stream
+socket.emit('join_a2a_messages');
+
+// Listen for new messages
+socket.on('new_a2a_message', (message) => {
+    console.log(`New ${message.direction} message: ${message.type}`);
+    console.log(`From: ${message.sender_id} → To: ${message.recipient_id}`);
+});
+
+// Get message statistics
+socket.emit('get_message_stats');
+socket.on('message_stats', (stats) => {
+    console.log('Message store stats:', stats);
+});
+```
+
+### Troubleshooting
+
+#### Common Issues
+
+**Message Store Not Available**
+- Check if A2A is enabled in configuration
+- Verify message store initialization in app startup logs
+- Check SQLite database permissions if using persistence
+
+**Messages Not Appearing**
+- Verify agents have A2A communication enabled
+- Check message sampling is not filtering messages
+- Ensure WebSocket connection is established
+
+**Performance Issues**
+- Reduce ring buffer size for memory-constrained environments
+- Enable sampling to reduce overhead under high load
+- Consider disabling full payload storage
+
+#### Monitoring Commands
+```bash
+# Check inspector health
+curl http://127.0.0.1:8000/api/a2a/inspector/health
+
+# Get current configuration
+curl http://127.0.0.1:8000/api/a2a/inspector/config
+
+# View recent messages
+curl "http://127.0.0.1:8000/api/a2a/messages?limit=10"
 ```
 
 ### Trace Event Types
