@@ -13,26 +13,55 @@ if src_path not in sys.path:
     sys.path.insert(0, src_path)
 
 from hosting import AgentManager
-from .routes import agents_bp, dashboard_bp
-from .websockets import setup_websocket_handlers
-from ..a2a.message_store import start_message_store
-from ..config.message_inspector import get_config
+
+# Import routes only (websockets will be imported in create_app to avoid circular import)
+try:
+    from api.routes import agents_bp, dashboard_bp
+except ImportError:
+    # Fallback to relative imports if absolute doesn't work
+    from .routes import agents_bp, dashboard_bp
+
+# Import A2A message store
+try:
+    from a2a.message_store import start_message_store
+except ImportError:
+    try:
+        from ..a2a.message_store import start_message_store
+    except ImportError:
+        start_message_store = None
+
+# Import config
+try:
+    from config.message_inspector import get_config
+except ImportError:
+    try:
+        from ..config.message_inspector import get_config
+    except ImportError:
+        get_config = lambda: {}
 
 # Import Langflow routes if available
 try:
-    from .langflow_routes import langflow_bp
+    from api.langflow_routes import langflow_bp
     LANGFLOW_ROUTES_AVAILABLE = True
 except ImportError:
-    langflow_bp = None
-    LANGFLOW_ROUTES_AVAILABLE = False
+    try:
+        from .langflow_routes import langflow_bp
+        LANGFLOW_ROUTES_AVAILABLE = True
+    except ImportError:
+        langflow_bp = None
+        LANGFLOW_ROUTES_AVAILABLE = False
 
 # Import A2A routes
 try:
-    from .a2a_routes import a2a_bp
+    from api.a2a_routes import a2a_bp
     A2A_ROUTES_AVAILABLE = True
 except ImportError:
-    a2a_bp = None
-    A2A_ROUTES_AVAILABLE = False
+    try:
+        from .a2a_routes import a2a_bp
+        A2A_ROUTES_AVAILABLE = True
+    except ImportError:
+        a2a_bp = None
+        A2A_ROUTES_AVAILABLE = False
 
 
 def create_app(config: Optional[dict] = None) -> Flask:
@@ -62,8 +91,16 @@ def create_app(config: Optional[dict] = None) -> Flask:
     if A2A_ROUTES_AVAILABLE:
         app.register_blueprint(a2a_bp)
     
-    # Setup WebSocket handlers
-    setup_websocket_handlers(app)
+    # Import and setup WebSocket handlers (done here to avoid circular import)
+    try:
+        from api.websockets import setup_websocket_handlers
+        setup_websocket_handlers(app)
+    except ImportError:
+        try:
+            from .websockets import setup_websocket_handlers
+            setup_websocket_handlers(app)
+        except ImportError as e:
+            app.logger.warning(f"Could not import websockets module: {e}")
     
     # Create event loop for async operations
     loop = asyncio.new_event_loop()
@@ -81,19 +118,28 @@ def create_app(config: Optional[dict] = None) -> Flask:
         """Initialize on startup"""
         # Initialize message store with configuration
         inspector_config = get_config()
-        message_store_config = inspector_config.to_message_store_config()
         
-        # Start message store
-        future = asyncio.run_coroutine_threadsafe(
-            start_message_store(message_store_config), 
-            app.async_loop
-        )
-        try:
-            message_store = future.result(timeout=10)
-            app.message_store = message_store
-            app.logger.info("Message store initialized")
-        except Exception as e:
-            app.logger.error(f"Failed to initialize message store: {e}")
+        # Handle both dict and config object
+        if hasattr(inspector_config, 'to_message_store_config'):
+            message_store_config = inspector_config.to_message_store_config()
+        else:
+            # Fallback to default config if get_config returns dict or None
+            message_store_config = inspector_config if isinstance(inspector_config, dict) else {}
+        
+        # Start message store if available
+        if start_message_store is not None:
+            future = asyncio.run_coroutine_threadsafe(
+                start_message_store(message_store_config), 
+                app.async_loop
+            )
+            try:
+                message_store = future.result(timeout=10)
+                app.message_store = message_store
+                app.logger.info("Message store initialized")
+            except Exception as e:
+                app.logger.error(f"Failed to initialize message store: {e}")
+        else:
+            app.logger.warning("Message store not available")
         
         # Load any saved agents
         future = asyncio.run_coroutine_threadsafe(

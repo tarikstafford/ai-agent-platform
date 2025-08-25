@@ -4,7 +4,20 @@ import json
 from typing import Dict, Any
 import structlog
 
-from ..a2a.message_store import get_message_store
+import sys
+from pathlib import Path
+
+# Add src to path if not already there
+src_path = str(Path(__file__).parent.parent)
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
+try:
+    from a2a.message_store import get_message_store
+except ImportError:
+    # Fallback if a2a module not available
+    def get_message_store():
+        return None
 
 logger = structlog.get_logger()
 
