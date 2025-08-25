@@ -15,6 +15,8 @@ if src_path not in sys.path:
 from hosting import AgentManager
 from .routes import agents_bp, dashboard_bp
 from .websockets import setup_websocket_handlers
+from ..a2a.message_store import start_message_store
+from ..config.message_inspector import get_config
 
 # Import Langflow routes if available
 try:
@@ -74,9 +76,25 @@ def create_app(config: Optional[dict] = None) -> Flask:
     thread.start()
     app.async_loop = loop
     
-    # Initialize saved agents on app creation
+    # Initialize message store and saved agents on app creation
     def startup():
         """Initialize on startup"""
+        # Initialize message store with configuration
+        inspector_config = get_config()
+        message_store_config = inspector_config.to_message_store_config()
+        
+        # Start message store
+        future = asyncio.run_coroutine_threadsafe(
+            start_message_store(message_store_config), 
+            app.async_loop
+        )
+        try:
+            message_store = future.result(timeout=10)
+            app.message_store = message_store
+            app.logger.info("Message store initialized")
+        except Exception as e:
+            app.logger.error(f"Failed to initialize message store: {e}")
+        
         # Load any saved agents
         future = asyncio.run_coroutine_threadsafe(
             agent_manager.load_saved_agents(), 

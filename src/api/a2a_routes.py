@@ -9,7 +9,7 @@ from typing import Dict, List, Optional, Any
 from datetime import datetime
 import asyncio
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response
 import structlog
 
 # Import A2A components
@@ -18,6 +18,9 @@ from ..a2a.protocol import (
     TaskDelegation, CollaborationRequest, AgentProfile
 )
 from ..a2a.tasks import TaskManager, CollaborationManager
+from ..a2a.message_store import (
+    get_message_store, MessageDirection, MessageProcessingStatus
+)
 
 logger = structlog.get_logger()
 
@@ -631,4 +634,272 @@ def get_network_overview():
     
     except Exception as e:
         logger.error("Error getting network overview", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+# Message Inspector Endpoints
+
+@a2a_bp.route('/messages', methods=['GET'])
+def get_messages():
+    """Get A2A messages with filtering"""
+    try:
+        message_store = get_message_store()
+        if not message_store:
+            return jsonify({"error": "Message store not available"}), 503
+        
+        # Parse query parameters
+        sender_id = request.args.get('sender_id')
+        recipient_id = request.args.get('recipient_id')
+        message_type = request.args.get('type')
+        direction = request.args.get('direction')
+        correlation_id = request.args.get('correlation_id')
+        query = request.args.get('q')  # Text search
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        
+        # Parse datetime parameters
+        since = None
+        until = None
+        if request.args.get('since'):
+            try:
+                since = datetime.fromisoformat(request.args.get('since'))
+            except ValueError:
+                return jsonify({"error": "Invalid 'since' datetime format"}), 400
+        
+        if request.args.get('until'):
+            try:
+                until = datetime.fromisoformat(request.args.get('until'))
+            except ValueError:
+                return jsonify({"error": "Invalid 'until' datetime format"}), 400
+        
+        # Convert direction parameter
+        direction_enum = None
+        if direction:
+            try:
+                direction_enum = MessageDirection(direction)
+            except ValueError:
+                return jsonify({"error": "Invalid direction. Use 'inbound' or 'outbound'"}), 400
+        
+        # Search messages
+        messages = message_store.search_messages(
+            sender_id=sender_id,
+            recipient_id=recipient_id,
+            message_type=message_type,
+            direction=direction_enum,
+            since=since,
+            until=until,
+            correlation_id=correlation_id,
+            query=query,
+            limit=limit,
+            offset=offset
+        )
+        
+        return jsonify({
+            "success": True,
+            "messages": [msg.to_dict() for msg in messages],
+            "count": len(messages),
+            "filters": {
+                "sender_id": sender_id,
+                "recipient_id": recipient_id,
+                "type": message_type,
+                "direction": direction,
+                "correlation_id": correlation_id,
+                "query": query,
+                "since": since.isoformat() if since else None,
+                "until": until.isoformat() if until else None
+            },
+            "pagination": {
+                "limit": limit,
+                "offset": offset
+            }
+        })
+    
+    except Exception as e:
+        logger.error("Error getting messages", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/messages/<message_id>', methods=['GET'])
+def get_message(message_id: str):
+    """Get specific message by ID"""
+    try:
+        message_store = get_message_store()
+        if not message_store:
+            return jsonify({"error": "Message store not available"}), 503
+        
+        message = message_store.get_message(message_id)
+        if not message:
+            return jsonify({"error": "Message not found"}), 404
+        
+        # Check permission for full payload
+        include_full_payload = request.args.get('include_payload', 'false').lower() == 'true'
+        
+        message_dict = message.to_dict()
+        
+        # Only include full payload if permitted and available
+        if include_full_payload and message.full_payload:
+            message_dict["full_payload"] = message.full_payload
+        else:
+            message_dict.pop("full_payload_available", None)
+        
+        return jsonify({
+            "success": True,
+            "message": message_dict
+        })
+    
+    except Exception as e:
+        logger.error("Error getting message", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/messages/<message_id>/replay', methods=['POST'])
+async def replay_message(message_id: str):
+    """Replay a message to a recipient (for debugging)"""
+    try:
+        data = request.get_json() or {}
+        target_recipient_id = data.get('target_recipient_id')
+        sandbox_mode = data.get('sandbox_mode', True)
+        requester_id = data.get('requester_id')
+        
+        if not requester_id:
+            return jsonify({"error": "requester_id is required"}), 400
+        
+        message_store = get_message_store()
+        if not message_store:
+            return jsonify({"error": "Message store not available"}), 503
+        
+        # Get original message
+        original_message = message_store.get_message(message_id)
+        if not original_message:
+            return jsonify({"error": "Original message not found"}), 404
+        
+        # Get the requester agent (for authorization)
+        registry = get_agent_registry()
+        if not registry:
+            return jsonify({"error": "Agent registry not available"}), 500
+        
+        requester_agent = registry.running_agents.get(requester_id)
+        if not requester_agent:
+            return jsonify({"error": "Requester agent not found"}), 404
+        
+        # Create new message for replay
+        try:
+            replay_message = A2AMessage(
+                type=A2AMessageType(original_message.type),
+                sender_id=requester_id,  # Replay sender is the requester
+                recipient_id=target_recipient_id or original_message.recipient_id,
+                correlation_id=f"replay_{original_message.id}",
+                priority=original_message.priority,
+                ttl_seconds=original_message.ttl_seconds,
+                payload={
+                    **original_message.full_payload,
+                    "_replay": {
+                        "original_message_id": original_message.id,
+                        "replay_timestamp": datetime.now().isoformat(),
+                        "sandbox_mode": sandbox_mode
+                    }
+                } if original_message.full_payload else {
+                    "_replay": {
+                        "original_message_id": original_message.id,
+                        "replay_timestamp": datetime.now().isoformat(),
+                        "sandbox_mode": sandbox_mode,
+                        "note": "Original payload not available"
+                    }
+                }
+            )
+        except ValueError as e:
+            return jsonify({"error": f"Invalid message type: {e}"}), 400
+        
+        # Send the replay message
+        if hasattr(requester_agent, 'a2a_communicator') and requester_agent.a2a_communicator:
+            replay_message_id = await requester_agent.a2a_communicator.send_message(replay_message)
+            
+            return jsonify({
+                "success": True,
+                "original_message_id": message_id,
+                "replay_message_id": replay_message_id,
+                "target_recipient_id": replay_message.recipient_id,
+                "sandbox_mode": sandbox_mode,
+                "requester_id": requester_id
+            })
+        else:
+            return jsonify({"error": "Requester agent does not have A2A communication enabled"}), 400
+    
+    except Exception as e:
+        logger.error("Error replaying message", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/messages/export', methods=['GET'])
+def export_messages():
+    """Export messages for a time range"""
+    try:
+        message_store = get_message_store()
+        if not message_store:
+            return jsonify({"error": "Message store not available"}), 503
+        
+        # Parse parameters
+        format_type = request.args.get('format', 'json').lower()
+        if format_type not in ['json', 'csv']:
+            return jsonify({"error": "Format must be 'json' or 'csv'"}), 400
+        
+        # Parse datetime parameters
+        since = None
+        until = None
+        if request.args.get('since'):
+            try:
+                since = datetime.fromisoformat(request.args.get('since'))
+            except ValueError:
+                return jsonify({"error": "Invalid 'since' datetime format"}), 400
+        
+        if request.args.get('until'):
+            try:
+                until = datetime.fromisoformat(request.args.get('until'))
+            except ValueError:
+                return jsonify({"error": "Invalid 'until' datetime format"}), 400
+        
+        # Export messages
+        exported_data = message_store.export_messages(since=since, until=until, format=format_type)
+        
+        if format_type == 'json':
+            return jsonify({
+                "success": True,
+                "format": format_type,
+                "messages": exported_data,
+                "count": len(exported_data),
+                "since": since.isoformat() if since else None,
+                "until": until.isoformat() if until else None
+            })
+        else:  # CSV
+            return Response(
+                exported_data,
+                mimetype='text/csv',
+                headers={
+                    'Content-Disposition': f'attachment; filename=a2a_messages_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv'
+                }
+            )
+    
+    except Exception as e:
+        logger.error("Error exporting messages", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/messages/stats', methods=['GET'])
+def get_message_stats():
+    """Get message store statistics"""
+    try:
+        message_store = get_message_store()
+        if not message_store:
+            return jsonify({"error": "Message store not available"}), 503
+        
+        stats = message_store.get_stats()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error("Error getting message stats", error=str(e))
         return jsonify({"error": str(e)}), 500

@@ -16,6 +16,9 @@ from .protocol import (
     MessageDelivery, MessageDeliveryStatus, AgentProfile,
     A2AError, AgentNotFoundError, MessageDeliveryError
 )
+from .message_store import (
+    get_message_store, MessageDirection, MessageProcessingStatus
+)
 
 logger = structlog.get_logger()
 
@@ -117,6 +120,11 @@ class A2ACommunicator:
         if not message.sender_id:
             message.sender_id = self.agent_id
         
+        # Log outbound message to message store
+        message_store = get_message_store()
+        if message_store:
+            message_store.log_message(message, MessageDirection.OUTBOUND)
+        
         # Create delivery tracking
         delivery = MessageDelivery(
             message_id=message.id,
@@ -177,6 +185,11 @@ class A2ACommunicator:
     
     async def receive_message(self, message: A2AMessage):
         """Receive an incoming message"""
+        # Log inbound message to message store
+        message_store = get_message_store()
+        if message_store:
+            message_store.log_message(message, MessageDirection.INBOUND)
+        
         await self.inbound_queue.put(message)
         self.stats["messages_received"] += 1
         
@@ -299,10 +312,24 @@ class A2ACommunicator:
                     delivery.status = MessageDeliveryStatus.DELIVERED
                     delivery.delivered_at = datetime.now()
                     self.stats["messages_sent"] += 1
+                    
+                    # Update message status in store
+                    message_store = get_message_store()
+                    if message_store:
+                        message_store.update_message_status(
+                            message.id, MessageProcessingStatus.DELIVERED
+                        )
                 else:
                     delivery.status = MessageDeliveryStatus.FAILED
                     delivery.attempts += 1
                     self.stats["messages_failed"] += 1
+                    
+                    # Update message status in store
+                    message_store = get_message_store()
+                    if message_store:
+                        message_store.update_message_status(
+                            message.id, MessageProcessingStatus.FAILED
+                        )
                 
                 delivery.last_attempt = datetime.now()
                 
