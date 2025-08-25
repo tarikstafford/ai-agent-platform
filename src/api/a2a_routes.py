@@ -11,16 +11,32 @@ import asyncio
 
 from flask import Blueprint, request, jsonify, Response
 import structlog
+import sys
+from pathlib import Path
+
+# Add src to path if not already there
+src_path = str(Path(__file__).parent.parent)
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
 
 # Import A2A components
-from ..a2a.protocol import (
+from a2a.protocol import (
     A2AMessage, A2AMessageType, A2ARequest, A2AResponse,
     TaskDelegation, CollaborationRequest, AgentProfile
 )
-from ..a2a.tasks import TaskManager, CollaborationManager
-from ..a2a.message_store import (
+from a2a.tasks import TaskManager, CollaborationManager
+
+# Import both tracing and message store functionality
+from a2a.message_store import (
     get_message_store, MessageDirection, MessageProcessingStatus
 )
+
+# Import tracing functionality if available
+try:
+    from a2a.traces import get_tracer
+except ImportError:
+    def get_tracer():
+        return None
 
 logger = structlog.get_logger()
 
@@ -902,4 +918,104 @@ def get_message_stats():
     
     except Exception as e:
         logger.error("Error getting message stats", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+# A2A Trace Viewer API Endpoints (if tracing is available)
+
+@a2a_bp.route('/traces/', methods=['GET'])
+async def list_traces():
+    """List recent traces with optional filtering"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        # Parse query parameters
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        agent_id = request.args.get('agent_id')
+        message_type = request.args.get('message_type')
+        time_range_hours = request.args.get('time_range_hours')
+        
+        # Convert time_range_hours to int if provided
+        if time_range_hours:
+            time_range_hours = int(time_range_hours)
+        
+        # Validate limits
+        if limit > 1000:
+            limit = 1000
+        
+        # Get traces
+        traces = await tracer.list_traces(
+            limit=limit,
+            offset=offset,
+            agent_id=agent_id,
+            message_type=message_type,
+            time_range_hours=time_range_hours
+        )
+        
+        return jsonify({
+            "success": True,
+            "traces": traces,
+            "count": len(traces),
+            "limit": limit,
+            "offset": offset,
+            "filters": {
+                "agent_id": agent_id,
+                "message_type": message_type,
+                "time_range_hours": time_range_hours
+            }
+        })
+    
+    except Exception as e:
+        logger.error("Error listing traces", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/<trace_id>', methods=['GET'])
+async def get_trace_details(trace_id: str):
+    """Get complete timeline for a specific trace ID"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        # Get trace details
+        trace = await tracer.get_trace(trace_id)
+        
+        if not trace:
+            return jsonify({"error": "Trace not found"}), 404
+        
+        return jsonify({
+            "success": True,
+            "trace": trace.to_dict()
+        })
+    
+    except Exception as e:
+        logger.error("Error getting trace details", trace_id=trace_id, error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/stats', methods=['GET'])
+async def get_trace_stats():
+    """Get tracing system statistics"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({
+                "enabled": False,
+                "error": "A2A tracing not enabled"
+            }), 503
+        
+        stats = await tracer.get_stats()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error("Error getting trace stats", error=str(e))
         return jsonify({"error": str(e)}), 500

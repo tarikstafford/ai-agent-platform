@@ -101,6 +101,127 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        
+        /* Trace Viewer Styles */
+        .trace-timeline {
+            position: relative;
+            padding: 1rem 0;
+        }
+        
+        .trace-event {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        
+        .trace-event::before {
+            content: '';
+            position: absolute;
+            left: 25px;
+            top: 40px;
+            bottom: -15px;
+            width: 2px;
+            background: #dee2e6;
+            z-index: 1;
+        }
+        
+        .trace-event:last-child::before {
+            display: none;
+        }
+        
+        .trace-event-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+            z-index: 2;
+            position: relative;
+        }
+        
+        .trace-event-icon.sent { background: #007bff; color: white; }
+        .trace-event-icon.received { background: #28a745; color: white; }
+        .trace-event-icon.delivered { background: #20c997; color: white; }
+        .trace-event-icon.failed { background: #dc3545; color: white; }
+        .trace-event-icon.retry { background: #ffc107; color: #212529; }
+        .trace-event-icon.routed { background: #6f42c1; color: white; }
+        
+        .trace-event-details {
+            flex: 1;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #dee2e6;
+        }
+        
+        .trace-filter-row {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .trace-list-item {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .trace-list-item:hover {
+            background: #f8f9fa;
+            border-color: #007bff;
+        }
+        
+        .trace-status-badge {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.375rem;
+        }
+        
+        .trace-status-delivered { background: #d4edda; color: #155724; }
+        .trace-status-failed { background: #f8d7da; color: #721c24; }
+        .trace-status-in_progress { background: #d1ecf1; color: #0c5460; }
+        .trace-status-timeout { background: #fff3cd; color: #856404; }
+        
+        .payload-preview {
+            background: #e9ecef;
+            border-radius: 4px;
+            padding: 0.5rem;
+            font-family: monospace;
+            font-size: 0.875rem;
+            max-height: 150px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .tab-nav {
+            border-bottom: 2px solid #dee2e6;
+            margin-bottom: 1rem;
+        }
+        
+        .tab-nav .nav-link {
+            border: none;
+            border-bottom: 3px solid transparent;
+            color: #6c757d;
+            font-weight: 500;
+        }
+        
+        .tab-nav .nav-link:hover {
+            border-bottom-color: #007bff;
+            color: #007bff;
+        }
+        
+        .tab-nav .nav-link.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            background: none;
+        }
     </style>
 </head>
 <body>
@@ -157,6 +278,29 @@
                 </div>
             </div>
         </div>
+
+        <!-- Tab Navigation -->
+        <div class="row mb-3">
+            <div class="col-12">
+                <ul class="nav nav-tabs tab-nav" role="tablist">
+                    <li class="nav-item">
+                        <a class="nav-link active" id="network-tab" data-bs-toggle="tab" href="#network-panel" role="tab">
+                            <i class="fas fa-project-diagram"></i> Network View
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" id="traces-tab" data-bs-toggle="tab" href="#traces-panel" role="tab">
+                            <i class="fas fa-route"></i> Message Traces
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+            <!-- Network View Panel -->
+            <div class="tab-pane fade show active" id="network-panel" role="tabpanel">
 
         <!-- Main Content Row -->
         <div class="row">
@@ -409,6 +553,166 @@
                 </div>
             </div>
         </div>
+        
+            </div>
+            <!-- End Network View Panel -->
+
+            <!-- Message Traces Panel -->
+            <div class="tab-pane fade" id="traces-panel" role="tabpanel">
+                
+                <!-- Trace Filters -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="trace-filter-row">
+                            <div class="row">
+                                <div class="col-md-3">
+                                    <label for="trace-agent-filter" class="form-label">Agent Filter</label>
+                                    <select class="form-select" id="trace-agent-filter">
+                                        <option value="">All Agents</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="trace-type-filter" class="form-label">Message Type</label>
+                                    <select class="form-select" id="trace-type-filter">
+                                        <option value="">All Types</option>
+                                        <option value="task_request">Task Request</option>
+                                        <option value="task_response">Task Response</option>
+                                        <option value="collaboration_request">Collaboration</option>
+                                        <option value="ping">Ping</option>
+                                        <option value="heartbeat">Heartbeat</option>
+                                        <option value="discovery_request">Discovery</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label for="trace-time-filter" class="form-label">Time Range</label>
+                                    <select class="form-select" id="trace-time-filter">
+                                        <option value="">All Time</option>
+                                        <option value="1">Last Hour</option>
+                                        <option value="24">Last 24 Hours</option>
+                                        <option value="168">Last Week</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="d-flex align-items-end h-100">
+                                        <button class="btn btn-primary me-2" onclick="loadTraces()">
+                                            <i class="fas fa-search"></i> Search
+                                        </button>
+                                        <button class="btn btn-outline-secondary" onclick="clearTraceFilters()">
+                                            <i class="fas fa-times"></i> Clear
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trace List/Detail Row -->
+                <div class="row">
+                    <!-- Trace List -->
+                    <div class="col-lg-5">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-list"></i>
+                                    Recent Traces
+                                </h5>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadTraces()">
+                                        <i class="fas fa-sync"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-success" onclick="exportTraces()">
+                                        <i class="fas fa-download"></i> Export
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                                <div id="traces-list">
+                                    <div class="text-center py-4">
+                                        <div class="loading-spinner mb-2"></div>
+                                        <p class="text-muted">Loading traces...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trace Details -->
+                    <div class="col-lg-7">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-route"></i>
+                                    Trace Timeline
+                                </h5>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary" id="export-trace-btn" onclick="exportCurrentTrace()" disabled>
+                                        <i class="fas fa-download"></i> Export
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="copyTraceId()" disabled id="copy-trace-id-btn">
+                                        <i class="fas fa-copy"></i> Copy ID
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                                <div id="trace-details">
+                                    <div class="text-center py-5 text-muted">
+                                        <i class="fas fa-mouse-pointer fa-3x mb-3"></i>
+                                        <p>Select a trace from the list to view its timeline</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Trace Statistics Row -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar"></i>
+                                    Trace Statistics
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row" id="trace-stats">
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="text-primary" id="total-traces">0</h4>
+                                            <p class="text-muted">Total Traces</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="text-success" id="successful-traces">0</h4>
+                                            <p class="text-muted">Successful</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="text-danger" id="failed-traces">0</h4>
+                                            <p class="text-muted">Failed</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="text-center">
+                                            <h4 class="text-info" id="avg-duration">0ms</h4>
+                                            <p class="text-muted">Avg Duration</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+            </div>
+            <!-- End Message Traces Panel -->
+
+        </div>
+        <!-- End Tab Content -->
     </div>
 
     <!-- Task Delegation Modal -->

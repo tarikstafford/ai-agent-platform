@@ -63,6 +63,14 @@ except ImportError:
         a2a_bp = None
         A2A_ROUTES_AVAILABLE = False
 
+# Import A2A tracing
+try:
+    from a2a.traces import init_tracing
+    A2A_TRACING_AVAILABLE = True
+except ImportError:
+    init_tracing = None
+    A2A_TRACING_AVAILABLE = False
+
 
 def create_app(config: Optional[dict] = None) -> Flask:
     """Create Flask application with agent management"""
@@ -78,6 +86,21 @@ def create_app(config: Optional[dict] = None) -> Flask:
     # Initialize agent manager
     agent_manager = AgentManager()
     app.agent_manager = agent_manager
+    
+    # Initialize A2A tracing if available
+    if A2A_TRACING_AVAILABLE:
+        tracing_enabled = app.config.get('A2A_TRACING_ENABLED', True)
+        retention_days = app.config.get('A2A_TRACE_RETENTION_DAYS', 7)
+        db_path = app.config.get('A2A_TRACE_DB_PATH', 'data/a2a_traces.db')
+        
+        if tracing_enabled:
+            tracer = init_tracing(
+                enabled=True,
+                db_path=db_path,
+                retention_days=retention_days
+            )
+            app.a2a_tracer = tracer
+            app.logger.info(f"A2A tracing initialized: {db_path} (retention: {retention_days} days)")
     
     # Register blueprints
     app.register_blueprint(agents_bp, url_prefix='/api/agents')
@@ -150,6 +173,18 @@ def create_app(config: Optional[dict] = None) -> Flask:
             future.result(timeout=10)
         except Exception as e:
             app.logger.error(f"Failed to load saved agents: {e}")
+        
+        # Start A2A tracer if available
+        if A2A_TRACING_AVAILABLE and hasattr(app, 'a2a_tracer'):
+            future = asyncio.run_coroutine_threadsafe(
+                app.a2a_tracer.start(),
+                app.async_loop
+            )
+            try:
+                future.result(timeout=5)
+                app.logger.info("A2A tracer started successfully")
+            except Exception as e:
+                app.logger.error(f"Failed to start A2A tracer: {e}")
     
     # Call startup immediately
     startup()
