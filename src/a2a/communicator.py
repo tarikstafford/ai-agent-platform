@@ -16,6 +16,7 @@ from .protocol import (
     MessageDelivery, MessageDeliveryStatus, AgentProfile,
     A2AError, AgentNotFoundError, MessageDeliveryError
 )
+from .traces import get_tracer
 
 logger = structlog.get_logger()
 
@@ -126,6 +127,11 @@ class A2ACommunicator:
         
         self.pending_deliveries[message.id] = delivery
         
+        # Trace message sent
+        tracer = get_tracer()
+        if tracer:
+            await tracer.trace_message_sent(message)
+        
         # Queue message for sending
         await self.outbound_queue.put((message, delivery_callback))
         
@@ -177,6 +183,11 @@ class A2ACommunicator:
     
     async def receive_message(self, message: A2AMessage):
         """Receive an incoming message"""
+        # Trace message received
+        tracer = get_tracer()
+        if tracer:
+            await tracer.trace_message_received(message, self.agent_id)
+        
         await self.inbound_queue.put(message)
         self.stats["messages_received"] += 1
         
@@ -295,6 +306,14 @@ class A2ACommunicator:
                 
                 success = await self._deliver_message(message)
                 
+                # Trace delivery result
+                tracer = get_tracer()
+                if tracer:
+                    if success:
+                        await tracer.trace_message_delivered(message)
+                    else:
+                        await tracer.trace_message_failed(message, "Delivery failed")
+                
                 if success:
                     delivery.status = MessageDeliveryStatus.DELIVERED
                     delivery.delivered_at = datetime.now()
@@ -303,6 +322,10 @@ class A2ACommunicator:
                     delivery.status = MessageDeliveryStatus.FAILED
                     delivery.attempts += 1
                     self.stats["messages_failed"] += 1
+                    
+                    # Trace retry if applicable
+                    if tracer and delivery.can_retry():
+                        await tracer.trace_message_retry(message, delivery.attempts, "Retrying delivery")
                 
                 delivery.last_attempt = datetime.now()
                 

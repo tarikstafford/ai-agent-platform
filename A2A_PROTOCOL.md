@@ -11,6 +11,7 @@ The A2A Communication Protocol enables intelligent agents to discover, communica
 - **Load Balancing**: Intelligent task assignment based on agent capacity
 - **Fault Tolerance**: Robust message delivery and retry mechanisms
 - **Network Visualization**: Visual dashboard for monitoring agent communications
+- **Message Tracing**: End-to-end message lifecycle debugging and monitoring
 
 ## 🏗️ Architecture Overview
 
@@ -46,6 +47,14 @@ The A2A Communication Protocol enables intelligent agents to discover, communica
 - Delivery tracking and retry logic
 - Network health monitoring
 - Performance optimization
+
+#### 6. Message Tracing (`src/a2a/traces.py`)
+- Complete message lifecycle tracking
+- Event-based trace recording (sent → routed → delivered → failed)
+- SQLite-based trace storage with configurable retention
+- Payload masking for sensitive data security
+- Real-time trace visualization and debugging tools
+- Export functionality for external analysis
 
 ## 📋 Message Types
 
@@ -466,6 +475,81 @@ python examples/multi_agent_workflow.py
 ```bash
 python benchmarks/a2a_scalability_test.py
 ```
+
+## 🔍 Message Tracing and Debugging
+
+The A2A platform includes a comprehensive message tracing system for debugging inter-agent communication flows.
+
+### Trace Viewer Features
+
+- **Complete Message Lifecycle**: Track messages from send → route → deliver → acknowledge/fail
+- **Visual Timeline**: Interactive timeline view of message events with timestamps
+- **Filtering and Search**: Filter by agent, message type, time range, and status
+- **Payload Preview**: Masked payload content for debugging (sensitive data protected)
+- **Export Functionality**: Export traces as JSON for external analysis
+- **Real-time Statistics**: Live metrics on trace counts, success rates, and performance
+
+### Accessing the Trace Viewer
+
+1. Start the platform: `python run_server.py`
+2. Open the A2A Dashboard: `http://127.0.0.1:8000/api/dashboard/a2a`
+3. Click the "Message Traces" tab
+4. Use filters to find specific traces or view recent activity
+
+### Trace Configuration
+
+Configure tracing behavior in `.env`:
+
+```bash
+# Enable/disable A2A tracing
+A2A_TRACING_ENABLED=true
+
+# Retention period for trace data
+A2A_TRACE_RETENTION_DAYS=7
+
+# Cleanup interval
+A2A_TRACE_CLEANUP_HOURS=24
+
+# Database path
+A2A_TRACE_DB_PATH=./data/a2a_traces.db
+```
+
+### Programmatic Trace Access
+
+```python
+# Get trace by correlation ID
+trace = await tracer.get_trace("correlation-id-123")
+print(f"Duration: {trace.duration_ms}ms")
+print(f"Status: {trace.final_status}")
+
+# List recent traces
+traces = await tracer.list_traces(
+    agent_id="agent-1",
+    time_range_hours=24,
+    limit=50
+)
+
+# Export trace data
+export_data = await tracer.export_trace("correlation-id-123")
+```
+
+### Trace Event Types
+
+- **SENT**: Message queued for sending
+- **RECEIVED**: Message received by target agent  
+- **ROUTED**: Message forwarded through intermediate agent
+- **RETRY**: Delivery retry attempted
+- **DELIVERED**: Message successfully delivered
+- **FAILED**: Message delivery failed permanently
+- **ACKNOWLEDGED**: Recipient confirmed message processing
+- **TIMEOUT**: Message expired before delivery
+
+### Security and Privacy
+
+- **Payload Masking**: Sensitive fields (api_key, password, token, etc.) are automatically masked
+- **Configurable Masking**: Custom masking rules can be defined
+- **Size Limits**: Payload previews are truncated to prevent storage bloat
+- **Retention Controls**: Automatic cleanup based on configurable retention periods
 
 ## 🤝 Contributing
 

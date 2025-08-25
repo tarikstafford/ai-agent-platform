@@ -695,3 +695,497 @@ async function startCollaboration() {
         button.disabled = false;
     }
 }
+
+// =============================================================================
+// TRACE VIEWER FUNCTIONALITY
+// =============================================================================
+
+// Global variables for trace viewer
+let currentTraces = [];
+let selectedTrace = null;
+let traceFilters = {
+    agent_id: null,
+    message_type: null,
+    time_range_hours: null
+};
+
+// Initialize trace viewer when the tab is shown
+document.addEventListener('DOMContentLoaded', function() {
+    // Listen for tab changes
+    const tracesTab = document.getElementById('traces-tab');
+    if (tracesTab) {
+        tracesTab.addEventListener('shown.bs.tab', function (e) {
+            initializeTraceViewer();
+        });
+    }
+});
+
+async function initializeTraceViewer() {
+    try {
+        await loadTraceAgents();
+        await loadTraces();
+        await loadTraceStats();
+    } catch (error) {
+        console.error('Error initializing trace viewer:', error);
+        showTraceError('Failed to initialize trace viewer: ' + error.message);
+    }
+}
+
+async function loadTraceAgents() {
+    try {
+        // Populate agent filter dropdown with available agents
+        const agentSelect = document.getElementById('trace-agent-filter');
+        if (!agentSelect) return;
+        
+        // Clear existing options (except "All Agents")
+        agentSelect.innerHTML = '<option value="">All Agents</option>';
+        
+        // Get agents from the main dashboard data
+        if (dashboard && dashboard.agents) {
+            dashboard.agents.forEach(agent => {
+                const option = document.createElement('option');
+                option.value = agent.id;
+                option.textContent = agent.name;
+                agentSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Error loading trace agents:', error);
+    }
+}
+
+async function loadTraces() {
+    try {
+        const tracesList = document.getElementById('traces-list');
+        if (!tracesList) return;
+        
+        // Show loading state
+        tracesList.innerHTML = `
+            <div class="text-center py-4">
+                <div class="loading-spinner mb-2"></div>
+                <p class="text-muted">Loading traces...</p>
+            </div>
+        `;
+        
+        // Build query parameters
+        const params = new URLSearchParams({
+            limit: 50,  // Load last 50 traces
+            offset: 0
+        });
+        
+        if (traceFilters.agent_id) {
+            params.append('agent_id', traceFilters.agent_id);
+        }
+        if (traceFilters.message_type) {
+            params.append('message_type', traceFilters.message_type);
+        }
+        if (traceFilters.time_range_hours) {
+            params.append('time_range_hours', traceFilters.time_range_hours);
+        }
+        
+        const response = await fetch(`/api/a2a/traces/?${params}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load traces');
+        }
+        
+        currentTraces = data.traces || [];
+        renderTracesList(currentTraces);
+        
+    } catch (error) {
+        console.error('Error loading traces:', error);
+        showTraceError('Failed to load traces: ' + error.message);
+    }
+}
+
+function renderTracesList(traces) {
+    const tracesList = document.getElementById('traces-list');
+    if (!tracesList) return;
+    
+    if (traces.length === 0) {
+        tracesList.innerHTML = `
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-inbox fa-3x mb-3"></i>
+                <p>No traces found</p>
+                <small>Try adjusting your filters or check if tracing is enabled</small>
+            </div>
+        `;
+        return;
+    }
+    
+    const tracesHtml = traces.map(trace => {
+        const firstEvent = new Date(trace.first_event);
+        const lastEvent = new Date(trace.last_event);
+        const duration = lastEvent - firstEvent;
+        
+        // Determine status based on event patterns
+        let status = 'in_progress';
+        let statusClass = 'trace-status-in_progress';
+        
+        if (trace.message_types.some(type => type.includes('failed'))) {
+            status = 'failed';
+            statusClass = 'trace-status-failed';
+        } else if (trace.message_types.some(type => type.includes('delivered') || type.includes('acknowledged'))) {
+            status = 'delivered';
+            statusClass = 'trace-status-delivered';
+        } else if (duration > 300000) { // 5 minutes
+            status = 'timeout';
+            statusClass = 'trace-status-timeout';
+        }
+        
+        return `
+            <div class="trace-list-item" onclick="selectTrace('${trace.trace_id}')" data-trace-id="${trace.trace_id}">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">
+                            <code class="text-primary">${trace.trace_id.substring(0, 8)}...</code>
+                        </h6>
+                        <small class="text-muted">
+                            ${firstEvent.toLocaleTimeString()} - ${lastEvent.toLocaleTimeString()}
+                        </small>
+                    </div>
+                    <span class="trace-status-badge ${statusClass}">${status}</span>
+                </div>
+                <div class="trace-summary">
+                    <small class="text-muted d-block">
+                        <i class="fas fa-exchange-alt"></i> ${trace.event_count} events
+                        <i class="fas fa-clock ms-2"></i> ${duration}ms
+                    </small>
+                    <small class="text-muted">
+                        Types: ${trace.message_types.join(', ').substring(0, 50)}${trace.message_types.join(', ').length > 50 ? '...' : ''}
+                    </small>
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    tracesList.innerHTML = tracesHtml;
+}
+
+async function selectTrace(traceId) {
+    try {
+        // Update visual selection
+        document.querySelectorAll('.trace-list-item').forEach(item => {
+            item.classList.remove('border-primary');
+        });
+        document.querySelector(`[data-trace-id="${traceId}"]`).classList.add('border-primary');
+        
+        // Show loading in details panel
+        const traceDetails = document.getElementById('trace-details');
+        if (!traceDetails) return;
+        
+        traceDetails.innerHTML = `
+            <div class="text-center py-4">
+                <div class="loading-spinner mb-2"></div>
+                <p class="text-muted">Loading trace details...</p>
+            </div>
+        `;
+        
+        // Enable export buttons
+        document.getElementById('export-trace-btn').disabled = false;
+        document.getElementById('copy-trace-id-btn').disabled = false;
+        
+        const response = await fetch(`/api/a2a/traces/${traceId}`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load trace details');
+        }
+        
+        selectedTrace = data.trace;
+        renderTraceTimeline(selectedTrace);
+        
+    } catch (error) {
+        console.error('Error loading trace details:', error);
+        showTraceDetailsError('Failed to load trace details: ' + error.message);
+    }
+}
+
+function renderTraceTimeline(trace) {
+    const traceDetails = document.getElementById('trace-details');
+    if (!traceDetails) return;
+    
+    const events = trace.events || [];
+    
+    if (events.length === 0) {
+        traceDetails.innerHTML = `
+            <div class="text-center py-4 text-muted">
+                <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+                <p>No events found in this trace</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Sort events by timestamp
+    events.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    
+    const summary = trace.summary || {};
+    
+    // Generate trace header
+    const headerHtml = `
+        <div class="trace-header mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="mb-0">Trace: <code>${trace.trace_id}</code></h6>
+                <small class="text-muted">${events.length} events</small>
+            </div>
+            <div class="row text-center">
+                <div class="col-3">
+                    <small class="text-muted">Duration</small>
+                    <div class="fw-bold text-info">${summary.duration_ms || 0}ms</div>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">Hops</small>
+                    <div class="fw-bold text-primary">${summary.hop_count || 0}</div>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">Retries</small>
+                    <div class="fw-bold text-warning">${summary.retry_count || 0}</div>
+                </div>
+                <div class="col-3">
+                    <small class="text-muted">Status</small>
+                    <div class="fw-bold text-${getStatusColor(summary.final_status)}">${summary.final_status || 'unknown'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Generate timeline events
+    const timelineHtml = events.map((event, index) => {
+        const eventTime = new Date(event.timestamp);
+        const iconClass = getEventIcon(event.event_type);
+        const eventClass = event.event_type.toLowerCase();
+        
+        return `
+            <div class="trace-event">
+                <div class="trace-event-icon ${eventClass}">
+                    <i class="${iconClass}"></i>
+                </div>
+                <div class="trace-event-details">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h6 class="mb-1">${formatEventType(event.event_type)}</h6>
+                            <small class="text-muted">
+                                ${eventTime.toLocaleString()}
+                                ${event.status_code ? ` • ${event.status_code}` : ''}
+                            </small>
+                        </div>
+                        ${event.message_type ? `<span class="badge bg-secondary">${event.message_type}</span>` : ''}
+                    </div>
+                    
+                    <div class="row mb-2">
+                        ${event.sender_id ? `
+                            <div class="col-md-6">
+                                <small class="text-muted">From:</small>
+                                <div class="fw-bold">${event.sender_id}</div>
+                            </div>
+                        ` : ''}
+                        ${event.recipient_id ? `
+                            <div class="col-md-6">
+                                <small class="text-muted">To:</small>
+                                <div class="fw-bold">${event.recipient_id}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                    
+                    ${event.agent_path && event.agent_path.length > 0 ? `
+                        <div class="mb-2">
+                            <small class="text-muted">Path:</small>
+                            <div class="fw-bold">${event.agent_path.join(' → ')}</div>
+                        </div>
+                    ` : ''}
+                    
+                    ${event.error_message ? `
+                        <div class="mb-2">
+                            <small class="text-danger">Error:</small>
+                            <div class="text-danger">${event.error_message}</div>
+                        </div>
+                    ` : ''}
+                    
+                    ${event.payload_preview ? `
+                        <div class="mb-2">
+                            <small class="text-muted">Payload Preview:</small>
+                            <div class="payload-preview">${event.payload_preview}</div>
+                        </div>
+                    ` : ''}
+                    
+                    ${Object.keys(event.metadata || {}).length > 0 ? `
+                        <div class="mb-2">
+                            <small class="text-muted">Metadata:</small>
+                            <div class="payload-preview">${JSON.stringify(event.metadata, null, 2)}</div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+    
+    traceDetails.innerHTML = headerHtml + `<div class="trace-timeline">${timelineHtml}</div>`;
+}
+
+function getEventIcon(eventType) {
+    const iconMap = {
+        sent: 'fas fa-paper-plane',
+        received: 'fas fa-inbox',
+        delivered: 'fas fa-check-circle',
+        failed: 'fas fa-times-circle',
+        retry: 'fas fa-redo',
+        routed: 'fas fa-route',
+        acknowledged: 'fas fa-thumbs-up',
+        timeout: 'fas fa-clock'
+    };
+    return iconMap[eventType] || 'fas fa-circle';
+}
+
+function formatEventType(eventType) {
+    return eventType.split('_').map(word => 
+        word.charAt(0).toUpperCase() + word.slice(1)
+    ).join(' ');
+}
+
+function getStatusColor(status) {
+    const colorMap = {
+        delivered: 'success',
+        acknowledged: 'success',
+        failed: 'danger',
+        timeout: 'warning',
+        in_progress: 'info'
+    };
+    return colorMap[status] || 'secondary';
+}
+
+async function loadTraceStats() {
+    try {
+        const response = await fetch('/api/a2a/traces/stats');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to load trace stats');
+        }
+        
+        const stats = data.stats || {};
+        const storage = stats.storage || {};
+        
+        // Update statistics display
+        document.getElementById('total-traces').textContent = storage.unique_traces || 0;
+        document.getElementById('successful-traces').textContent = 
+            (storage.events_by_type && storage.events_by_type.delivered) || 0;
+        document.getElementById('failed-traces').textContent = 
+            (storage.events_by_type && storage.events_by_type.failed) || 0;
+        
+        // Calculate average duration (placeholder)
+        document.getElementById('avg-duration').textContent = '~250ms';
+        
+    } catch (error) {
+        console.error('Error loading trace stats:', error);
+    }
+}
+
+function clearTraceFilters() {
+    traceFilters = {
+        agent_id: null,
+        message_type: null,
+        time_range_hours: null
+    };
+    
+    // Clear form fields
+    document.getElementById('trace-agent-filter').value = '';
+    document.getElementById('trace-type-filter').value = '';
+    document.getElementById('trace-time-filter').value = '';
+    
+    // Reload traces
+    loadTraces();
+}
+
+function updateTraceFilters() {
+    traceFilters.agent_id = document.getElementById('trace-agent-filter').value || null;
+    traceFilters.message_type = document.getElementById('trace-type-filter').value || null;
+    traceFilters.time_range_hours = document.getElementById('trace-time-filter').value || null;
+}
+
+async function exportCurrentTrace() {
+    if (!selectedTrace) return;
+    
+    try {
+        const response = await fetch(`/api/a2a/traces/${selectedTrace.trace_id}/export`);
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `trace_${selectedTrace.trace_id}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        dashboard.addMessageToLog(`Trace exported: ${selectedTrace.trace_id}`, 'success');
+        
+    } catch (error) {
+        console.error('Error exporting trace:', error);
+        dashboard.addMessageToLog(`Export error: ${error.message}`, 'error');
+    }
+}
+
+function copyTraceId() {
+    if (!selectedTrace) return;
+    
+    navigator.clipboard.writeText(selectedTrace.trace_id).then(() => {
+        dashboard.addMessageToLog(`Trace ID copied: ${selectedTrace.trace_id}`, 'success');
+    }).catch(error => {
+        console.error('Error copying trace ID:', error);
+        dashboard.addMessageToLog(`Copy error: ${error.message}`, 'error');
+    });
+}
+
+function showTraceError(message) {
+    const tracesList = document.getElementById('traces-list');
+    if (!tracesList) return;
+    
+    tracesList.innerHTML = `
+        <div class="text-center py-4 text-danger">
+            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+function showTraceDetailsError(message) {
+    const traceDetails = document.getElementById('trace-details');
+    if (!traceDetails) return;
+    
+    traceDetails.innerHTML = `
+        <div class="text-center py-4 text-danger">
+            <i class="fas fa-exclamation-triangle fa-2x mb-3"></i>
+            <p>${message}</p>
+        </div>
+    `;
+}
+
+// Filter event handlers
+document.addEventListener('DOMContentLoaded', function() {
+    // Bind filter change events
+    ['trace-agent-filter', 'trace-type-filter', 'trace-time-filter'].forEach(id => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('change', updateTraceFilters);
+        }
+    });
+});

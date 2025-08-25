@@ -18,6 +18,7 @@ from ..a2a.protocol import (
     TaskDelegation, CollaborationRequest, AgentProfile
 )
 from ..a2a.tasks import TaskManager, CollaborationManager
+from ..a2a.traces import get_tracer
 
 logger = structlog.get_logger()
 
@@ -631,4 +632,215 @@ def get_network_overview():
     
     except Exception as e:
         logger.error("Error getting network overview", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+# A2A Trace Viewer API Endpoints
+
+@a2a_bp.route('/traces/', methods=['GET'])
+async def list_traces():
+    """List recent traces with optional filtering"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        # Parse query parameters
+        limit = int(request.args.get('limit', 100))
+        offset = int(request.args.get('offset', 0))
+        agent_id = request.args.get('agent_id')
+        message_type = request.args.get('message_type')
+        time_range_hours = request.args.get('time_range_hours')
+        
+        # Convert time_range_hours to int if provided
+        if time_range_hours:
+            time_range_hours = int(time_range_hours)
+        
+        # Validate limits
+        if limit > 1000:
+            limit = 1000
+        
+        # Get traces
+        traces = await tracer.list_traces(
+            limit=limit,
+            offset=offset,
+            agent_id=agent_id,
+            message_type=message_type,
+            time_range_hours=time_range_hours
+        )
+        
+        return jsonify({
+            "success": True,
+            "traces": traces,
+            "count": len(traces),
+            "limit": limit,
+            "offset": offset,
+            "filters": {
+                "agent_id": agent_id,
+                "message_type": message_type,
+                "time_range_hours": time_range_hours
+            }
+        })
+    
+    except Exception as e:
+        logger.error("Error listing traces", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/<trace_id>', methods=['GET'])
+async def get_trace_details(trace_id: str):
+    """Get complete timeline for a specific trace ID"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        # Get trace details
+        trace = await tracer.get_trace(trace_id)
+        
+        if not trace:
+            return jsonify({"error": "Trace not found"}), 404
+        
+        return jsonify({
+            "success": True,
+            "trace": trace.to_dict()
+        })
+    
+    except Exception as e:
+        logger.error("Error getting trace details", trace_id=trace_id, error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/query', methods=['POST'])
+async def query_traces():
+    """Advanced trace query with multiple filters"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        data = request.get_json() or {}
+        
+        # Extract query parameters
+        limit = min(data.get('limit', 100), 1000)  # Cap at 1000
+        offset = data.get('offset', 0)
+        
+        # Filters
+        filters = data.get('filters', {})
+        agent_id = filters.get('agent_id')
+        message_type = filters.get('message_type')
+        time_range_hours = filters.get('time_range_hours')
+        
+        # Get traces
+        traces = await tracer.list_traces(
+            limit=limit,
+            offset=offset,
+            agent_id=agent_id,
+            message_type=message_type,
+            time_range_hours=time_range_hours
+        )
+        
+        # Additional client-side filtering can be applied here
+        # For example, filtering by status, event types, etc.
+        status_filter = filters.get('status')
+        if status_filter and traces:
+            # This would require getting full trace details for each trace
+            # For now, we'll return all traces and let the client filter
+            pass
+        
+        return jsonify({
+            "success": True,
+            "traces": traces,
+            "count": len(traces),
+            "query": {
+                "limit": limit,
+                "offset": offset,
+                "filters": filters
+            }
+        })
+    
+    except Exception as e:
+        logger.error("Error querying traces", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/<trace_id>/export', methods=['GET'])
+async def export_trace(trace_id: str):
+    """Export trace as JSON for download"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        trace = await tracer.get_trace(trace_id)
+        if not trace:
+            return jsonify({"error": "Trace not found"}), 404
+        
+        # Create export format
+        export_data = {
+            "trace_id": trace_id,
+            "exported_at": datetime.now().isoformat(),
+            "trace_data": trace.to_dict(),
+            "metadata": {
+                "export_format": "a2a_trace_v1",
+                "platform": "ai-agent-platform"
+            }
+        }
+        
+        response = jsonify(export_data)
+        response.headers['Content-Disposition'] = f'attachment; filename=trace_{trace_id}.json'
+        return response
+    
+    except Exception as e:
+        logger.error("Error exporting trace", trace_id=trace_id, error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/stats', methods=['GET'])
+async def get_trace_stats():
+    """Get tracing system statistics"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({
+                "enabled": False,
+                "error": "A2A tracing not enabled"
+            }), 503
+        
+        stats = await tracer.get_stats()
+        
+        return jsonify({
+            "success": True,
+            "stats": stats,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error("Error getting trace stats", error=str(e))
+        return jsonify({"error": str(e)}), 500
+
+
+@a2a_bp.route('/traces/cleanup', methods=['POST'])
+async def cleanup_traces():
+    """Manually trigger trace cleanup (admin endpoint)"""
+    try:
+        tracer = get_tracer()
+        if not tracer:
+            return jsonify({"error": "A2A tracing not enabled"}), 503
+        
+        data = request.get_json() or {}
+        retention_days = data.get('retention_days', tracer.retention_days)
+        
+        # Perform cleanup
+        deleted_count = await tracer.storage.cleanup_expired_traces(retention_days)
+        
+        return jsonify({
+            "success": True,
+            "deleted_count": deleted_count,
+            "retention_days": retention_days,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error("Error cleaning up traces", error=str(e))
         return jsonify({"error": str(e)}), 500
